@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.papi/
+forge-out/
+forge-cache/
+lib/
+.env
+.env.local
+.DS_Store
+*.log
+typechain-types/
