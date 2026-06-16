@@ -9,6 +9,7 @@ import {ITambola} from "./ITambola.sol";
 ///         to top-line / middle-line / bottom-line / full-house / host.
 /// @dev    Public types, events, and external function signatures live in ITambola.sol —
 ///         keep them in sync if you change either side.
+/// @custom:cdm @tambola/tambola
 contract Tambola is ITambola {
     struct Game {
         address host;

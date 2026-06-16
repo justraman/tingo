@@ -41,7 +41,13 @@
       "Bash(command -v foundryup)",
       "Bash(curl -L https://foundry.paradigm.xyz)",
       "Bash(bash)",
-      "Bash(bun remove *)"
+      "Bash(bun remove *)",
+      "Bash(command -v playground)",
+      "Bash(playground --version)",
+      "Bash(playground contract *)",
+      "Bash(playground --help)",
+      "Bash(playground init *)",
+      "Bash(node_modules/.bin/resolc --version)"
     ]
   }
 }
