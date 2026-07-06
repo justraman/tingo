@@ -98,7 +98,7 @@ export default function HomePage() {
               <div className="text-xs text-muted-foreground">Drawn: {game.drawnCount.toString()} / 90</div>
             </CardContent>
             <CardFooter>
-              <Link className="w-full" href={`/game?id=${id}`}><Button variant="outline" className="w-full">Open</Button></Link>
+              <Link className="w-full" href={`/game/${id}/`}><Button variant="outline" className="w-full">Open</Button></Link>
             </CardFooter>
           </Card>
         ))}

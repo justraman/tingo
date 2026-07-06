@@ -53,7 +53,7 @@ pull-payment ledger — call `withdraw()` to receive funds.
 ```
 contracts/   Tambola.sol + ITambola.sol         (the referee)
 test/        Tambola.t.sol                       (Foundry, 19 cases)
-app/         Next.js routes: / · /host/new · /game?id=N
+app/         Next.js routes: / · /host/new · /game/{id}
 src/lib/     chain/ (client·signer·constants) · tambola/ (read·write·events·ticket·encode·abi)
              host/ (detect) · chat/ (manager) · store/ (zustand)
 src/components/  TicketGrid · NumberBoard · Countdown · TicketGenerator · ChatPanel · WinnerBanner

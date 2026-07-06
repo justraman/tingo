@@ -77,7 +77,7 @@ capability traits. Methods quoted below are exact names from the source.
 | `Chain`              | `followHeadSubscribe`, `getHeadHeader`, …                                                    | The host-routed chain connection (PAPI provider) |
 | `Signing`            | `createTransaction` (product account), `createTransactionWithLegacyAccount`                  | Build a signed extrinsic without ever seeing the key |
 | `Account`            | `getAccount`, `getAccountAlias`, `connectionStatusSubscribe`                                 | App-scoped (product) accounts + Ring-VRF aliases |
-| `Chat`               | `createRoom`, `registerBot`, `listSubscribe`, post-message, subscribe-action                 | In-game chat rooms (our per-game room) |
+| `Chat`               | `createRoom`, `registerBot`, `listSubscribe`, post-message, subscribe-action                 | Not implemented by hosts yet — we chat over `StatementStore` instead |
 | `Permissions`        | `requestDevicePermission`, `requestRemotePermission`                                         | Ask once; persisted thereafter |
 | `ResourceAllocation` | request resource allowances                                                                  | Pre-grant e.g. Bulletin / statement allowances |
 | `StatementStore`     | subscribe / createProof / submit                                                             | Ephemeral on-chain messaging |
@@ -107,8 +107,10 @@ uses or could use:
 - `isInsideContainer()` / `isInsideContainerSync()` — host detection.
 - `getHostProvider(genesisHash)` — a PAPI `JsonRpcProvider` routed through the host's
   shared chain connection. **This is the `Chain` namespace in practice.**
-- `getChatManager()` — `createRoom`/`registerRoom`, `sendMessage`,
-  `subscribeAction`, `listSubscribe`. **This is `Chat`.**
+- `getChatManager()` — **unused**: hosts don't implement `Chat` yet. In-game chat
+  rides the statement store via `@parity/product-sdk-statement-store`
+  (`StatementStoreClient`, host mode) — topic1 = app name, topic2 = `tambola-<id>`
+  (see `src/lib/chat/protocol.ts`).
 - `getAccountsProvider()` — host wallet accounts, product accounts, Ring-VRF, login.
 - `getTruApi()` — the low-level escape hatch (`navigateTo`, `permission`,
   `deriveEntropy`, `themeSubscribe`, `signing.createTransaction`, …) when no
@@ -133,12 +135,12 @@ uses or could use:
 │  Holds keys · owns chain connections · enforces permissions (the "constraint" layer)   │
 │                                                                                         │
 │   TrUAPI  (SCALE over MessagePort)                                                      │
-│     ▲  getHostProvider / getChatManager / signing / accounts / permissions ...         │
+│     ▲  getHostProvider / statement store / signing / accounts / permissions ...        │
 │     │                                                                                   │
 │  ┌──┴───────────────── Product sandbox (our code) ─────────────────────────────────┐   │
 │  │                                                                                   │   │
 │  │   Next.js static export (app/, src/)            Worker (worker/index.ts)          │   │
-│  │   ─ game list / schedule / live view            ─ chat room per game             │   │
+│  │   ─ game list / schedule / live view            ─ chat announcements per game    │   │
 │  │   ─ reads via ReviveApi.call (dry-run)          ─ pokes drawNumber every N blocks│   │
 │  │   ─ writes via Revive.call extrinsic            ─ subscribes best block          │   │
 │  │   ─ events via Revive.ContractEmitted           ─ posts system chat messages     │   │
@@ -255,8 +257,10 @@ a `ReentrantSink` guard test.
 
 Next.js 15 App Router, **`output: "export"`** (fully static — required for IPFS / host
 delivery), `trailingSlash`, unoptimized images, React 19, Tailwind + shadcn, dark by
-default. Because static export forbids dynamic route segments, the live game uses a
-**query string** (`/game?id=N`) instead of `/game/[id]`.
+default. The live game lives at **`/game/{id}`** — a dynamic segment pre-rendered via
+`generateStaticParams` for the first `MAX_PRERENDERED_GAMES` sequential ids (static
+export can't materialize unbounded params and IPFS/DotNS gateways can't do SPA
+rewrites). Legacy `/game?id=N` links redirect client-side.
 
 ### 6.1 Chain layer (`src/lib/chain/`)
 
@@ -308,7 +312,7 @@ pallet-revive calls** over PAPI's unsafe API:
 - `/` (`page.tsx`) — lists games (`readNextGameId` then iterates `readGame`); shows the
   "open in Polkadot Desktop" card in standalone mode.
 - `/host/new` — schedule form (start datetime + ticket price) → `callCreateGame`.
-- `/game?id=N` — the live view: countdown, ticket generator/buy, number board, winner
+- `/game/{id}` — the live view: countdown, ticket generator/buy, number board, winner
   banner, your-ticket grid, refund + withdraw, and the chat panel. Wires three
   subscriptions (best block, contract events scoped to this game, chat) and refreshes
   reads on each event.
@@ -324,13 +328,15 @@ A separate executable, Vite-built to `./out/worker`, running in the host's worke
 sandbox (`includes.chat: true`). It is a **convenience, not a trust anchor** — the draw
 is permissionless, so a stalled worker never bricks a game. Two jobs:
 
-1. **Chat lifecycle.** On `GameCreated`, `registerRoom` for `tambola-<id>` and post a
-   welcome; on `GameWon` / `GameEndedNoWinner`, post a closing system message.
+1. **Chat announcements.** On `GameCreated`, publish a welcome statement to the
+   `tambola-<id>` room (statement-store topic2); on `GameWon` /
+   `GameEndedNoWinner`, publish a closing message.
 2. **Draw poker.** Subscribes `bestBlocks$`; for each active game past `startBlock` and
    `lastDrawBlock + N`, dry-runs and submits `drawNumber`, guarded by a `pendingTx`
    flag so it never double-fires while a tx is in flight.
 
-It uses `getChatManager`, `getHostProvider`, and (see §9) a host signer.
+It uses `StatementStoreClient` (host mode), `getHostProvider`, and (see §9) a host
+signer.
 
 ---
 
@@ -338,7 +344,7 @@ It uses `getChatManager`, `getHostProvider`, and (see §9) a host signer.
 
 ```
 Host schedules     → callCreateGame → Revive.call createGame → GameCreated
-                                                              → worker registers chat room
+                                                              → worker announces game in chat
 Player generates   → ticket.ts (crypto RNG) → draft store (localStorage)
 Player buys        → callBuyTicket(value=price) → buyTicket validates+stores bitmaps → TicketBought
 Start block passes → worker/players call drawNumber every N blocks → NumberDrawn (×up to 90)

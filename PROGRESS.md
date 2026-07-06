@@ -42,9 +42,10 @@ payout, full-house payout for each unclaimed-line combo (sum = 100%), withdraw, 
 pre-conditions, and a `ReentrantSink` reentrancy guard test.
 
 ### Frontend (`app/`, `src/`) — Next.js 15 + shadcn, static export
-- Pages: `/` (game list), `/host/new` (schedule), `/game?id=N` (live view — countdown,
+- Pages: `/` (game list), `/host/new` (schedule), `/game/{id}` (live view — countdown,
   ticket generator/regenerator, buy, number board, winners, refund + withdraw, chat).
-  Query-string route (not `[id]`) because `output: 'export'` forbids dynamic segments.
+  `[id]` is pre-rendered via `generateStaticParams` for the first `MAX_PRERENDERED_GAMES`
+  ids; legacy `/game?id=N` redirects client-side.
 - Components: `TicketGrid`, `NumberBoard`, `Countdown`, `TicketGenerator`, `ChatPanel`,
   `WinnerBanner` + shadcn `ui/*`.
 - Chain libs (`src/lib/chain/*`): host detection, PAPI client singleton (host provider

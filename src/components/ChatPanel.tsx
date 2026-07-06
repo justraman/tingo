@@ -27,8 +27,8 @@ export function ChatPanel({ gameId, disabled }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void attachChatSubscription();
-  }, []);
+    void attachChatSubscription(gameId);
+  }, [gameId]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
@@ -73,6 +73,7 @@ export function ChatPanel({ gameId, disabled }: Props) {
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
+            maxLength={240} /* statements cap the payload at 512 bytes */
             disabled={readonly || busy}
             placeholder={readonly ? "Chat ended" : "Type a message…"}
             onKeyDown={(e) => { if (e.key === "Enter") void send(); }}

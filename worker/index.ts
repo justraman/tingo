@@ -2,10 +2,9 @@
  * Tambola worker.
  *
  * Two jobs:
- *   1. Listen for `GameCreated` events from the Tambola contract and register
- *      a chat room per game id so players in that game can talk.
- *      Marks the room as closed (system message) on `GameWon` /
- *      `GameEndedNoWinner`.
+ *   1. Announce game milestones (welcome / full house / no winner) in each
+ *      game's statement-store chat room, keyed by `GameCreated` /
+ *      `GameWon` / `GameEndedNoWinner` contract events.
  *
  *   2. Drive the game forward by calling `drawNumber(gameId)` once
  *      `block.timestamp >= startTime` and at least `BLOCKS_BETWEEN_DRAWS`
@@ -13,18 +12,17 @@
  *      worker is a convenience, not a trust anchor — a player can still poke
  *      the game forward from the browser.
  *
- * Runs inside the Polkadot Triangle host worker sandbox (chat: true in
- * bulletin-deploy.config.ts). No filesystem or direct HTTP allowed.
+ * Runs inside the Polkadot Triangle host worker sandbox. No filesystem or
+ * direct HTTP allowed.
  */
 
 import { createClient, Binary } from "polkadot-api";
 import { bytesToHex, encodeFunctionData, decodeEventLog, type Abi } from "viem";
-import {
-  getChatManager,
-  getHostProvider,
-} from "@parity/product-sdk-host";
+import { getHostProvider } from "@parity/product-sdk-host";
+import { StatementStoreClient } from "@parity/product-sdk-statement-store";
 
 import { ss58ToH160 } from "@parity/product-sdk-address";
+import { CHAT_APP_NAME, CHAT_TTL_SECONDS, roomIdForGame, type ChatPayload } from "../src/lib/chat/protocol";
 import { TAMBOLA_ABI } from "../src/lib/tambola/abi";
 import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
 import { ensureSignerConnected, signerManager } from "../src/lib/chain/signer";
@@ -40,13 +38,31 @@ interface ActiveGame {
 
 const active = new Map<string, ActiveGame>();
 
-function roomId(gameId: bigint) { return `tambola-${gameId.toString()}`; }
+async function connectChat(): Promise<StatementStoreClient | null> {
+  try {
+    const client = new StatementStoreClient({
+      appName: CHAT_APP_NAME,
+      defaultTtlSeconds: CHAT_TTL_SECONDS,
+    });
+    await client.connect({ mode: "host" });
+    return client;
+  } catch (e) {
+    console.warn("[tambola-worker] statement store unavailable", e);
+    return null;
+  }
+}
+
+async function announce(chat: StatementStoreClient | null, gameId: bigint, text: string) {
+  if (!chat) return;
+  try {
+    await chat.publish<ChatPayload>({ text }, { topic2: roomIdForGame(gameId) });
+  } catch (e) {
+    console.warn("[tambola-worker] announce failed", gameId.toString(), e);
+  }
+}
 
 async function main() {
-  const chat = await getChatManager();
-  if (!chat) {
-    console.warn("[tambola-worker] no chat manager available");
-  }
+  const chat = await connectChat();
 
   const provider = await getHostProvider(CHAIN.genesis);
   if (!provider) throw new Error("worker: no host provider");
@@ -80,19 +96,7 @@ async function main() {
       const key = gameId.toString();
 
       if (decoded.eventName === "GameCreated") {
-        if (chat) {
-          const status = await chat.registerRoom({
-            roomId: roomId(gameId),
-            name:   `Tambola #${gameId.toString()}`,
-            icon:   "",
-          });
-          if (status === "New") {
-            await chat.sendMessage(roomId(gameId), {
-              tag: "Text",
-              value: { text: `Welcome to Tambola #${gameId.toString()}. Good luck! 🎯` },
-            });
-          }
-        }
+        await announce(chat, gameId, `Welcome to Tambola #${gameId.toString()}. Good luck! 🎯`);
         active.set(key, {
           startTime:     decoded.args.startTime as bigint,
           lastDrawBlock: 0n,
@@ -107,21 +111,11 @@ async function main() {
           a.pendingTx     = false;
         }
       } else if (decoded.eventName === "GameWon") {
-        if (chat) {
-          await chat.sendMessage(roomId(gameId), {
-            tag: "Text",
-            value: { text: `🏆 Full house! Game over.` },
-          });
-        }
+        await announce(chat, gameId, `🏆 Full house! Game over.`);
         const a = active.get(key); if (a) a.state = 2;
         active.delete(key);
       } else if (decoded.eventName === "GameEndedNoWinner") {
-        if (chat) {
-          await chat.sendMessage(roomId(gameId), {
-            tag: "Text",
-            value: { text: `Game ended without a full house — refunds available.` },
-          });
-        }
+        await announce(chat, gameId, `Game ended without a full house — refunds available.`);
         const a = active.get(key); if (a) a.state = 3;
         active.delete(key);
       }

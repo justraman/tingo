@@ -67,8 +67,11 @@ it without prose.
 7. **Keep chain constants in one place.** `CHAIN` (`src/lib/chain/constants.ts`) and the
    contract constants must agree — especially block time and `BLOCKS_BETWEEN_DRAWS`.
    Read on-chain constants where you can instead of hardcoding a second copy.
-8. **Static export is non-negotiable.** `output: "export"` → no server code, no dynamic
-   route segments (use `/game?id=N`), no `next/image` optimization. Don't add anything
+8. **Static export is non-negotiable.** `output: "export"` → no server code, no
+   `next/image` optimization. Dynamic segments only via `generateStaticParams`:
+   `/game/{id}` is pre-rendered for the first `MAX_PRERENDERED_GAMES` ids
+   (`app/game/[id]/page.tsx`) because IPFS/DotNS gateways can't do SPA rewrites —
+   bump the constant and redeploy when the deployment outgrows it. Don't add anything
    that needs a Node server.
 
 ## Commands
