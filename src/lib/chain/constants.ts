@@ -6,11 +6,10 @@
 export const CHAIN = {
   name: process.env.NEXT_PUBLIC_CHAIN_NAME ?? "paseo-asset-hub-next",
   genesis: (process.env.NEXT_PUBLIC_CHAIN_GENESIS ??
-    "0xbf0488c1da81db8e9b5b1ba31bc20b2cad97a83a4e92e7b71c7c4f6a02b86c01") as `0x${string}`,
+    "0xbf0488dbe9daa1de1c08c5f743e26fdc2a4ecd74cf87dd1b4b1eeb99ae4ef19f") as `0x${string}`,
   rpc: process.env.NEXT_PUBLIC_CHAIN_RPC ?? "wss://paseo-asset-hub-next-rpc.polkadot.io",
   decimals: Number(process.env.NEXT_PUBLIC_TOKEN_DECIMALS ?? "10"),
   symbol: process.env.NEXT_PUBLIC_TOKEN_SYMBOL ?? "PAS",
-  blockTimeSec: 6,
 };
 
 export const TAMBOLA_ADDRESS =

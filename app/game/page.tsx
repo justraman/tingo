@@ -54,7 +54,6 @@ function GamePage() {
   const markBought = useDraftStore((s) => s.markBought);
 
   const snap = useGameStore((s) => s.byId[gameId.toString()]);
-  const bestBlock = useGameStore((s) => s.bestBlock);
   const setBestBlock = useGameStore((s) => s.setBestBlock);
   const setGame = useGameStore((s) => s.setGame);
   const appendDrawn = useGameStore((s) => s.appendDrawn);
@@ -247,7 +246,7 @@ function GamePage() {
               Hosted by {shortenAddress(game.host)} ·
               {" "}{game.playerCount}/{game.maxPlayers} players ·
               {" "}pot {formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol)} ·
-              {" "}starts in <Countdown startBlock={game.startBlock} currentBlock={bestBlock} />
+              {" "}starts in <Countdown startTime={game.startTime} />
             </CardDescription>
           </CardHeader>
         </Card>

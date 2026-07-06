@@ -8,9 +8,10 @@
  *      `GameEndedNoWinner`.
  *
  *   2. Drive the game forward by calling `drawNumber(gameId)` once
- *      `current_block >= startBlock + lastDrawBlock + 4`. `drawNumber` is
- *      permissionless so the worker is a convenience, not a trust anchor — a
- *      player can still poke the game forward from the browser.
+ *      `block.timestamp >= startTime` and at least `BLOCKS_BETWEEN_DRAWS`
+ *      blocks since the last draw. `drawNumber` is permissionless so the
+ *      worker is a convenience, not a trust anchor — a player can still poke
+ *      the game forward from the browser.
  *
  * Runs inside the Polkadot Triangle host worker sandbox (chat: true in
  * bulletin-deploy.config.ts). No filesystem or direct HTTP allowed.
@@ -21,16 +22,16 @@ import { encodeFunctionData, decodeEventLog, type Abi } from "viem";
 import {
   getChatManager,
   getHostProvider,
-  getHostSigner,
 } from "@parity/product-sdk-host";
 
 import { TAMBOLA_ABI } from "../src/lib/tambola/abi";
 import { TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
+import { ensureSignerConnected, signerManager } from "../src/lib/chain/signer";
 
-const BLOCKS_BETWEEN_DRAWS = 4;
+const BLOCKS_BETWEEN_DRAWS = 5;   // mirror Tambola.BLOCKS_BETWEEN_DRAWS
 
 interface ActiveGame {
-  startBlock: bigint;
+  startTime: bigint;            // unix seconds
   lastDrawBlock: bigint;
   state: number;        // 0=Pending 1=Live 2=Won 3=NoWinner
   pendingTx: boolean;
@@ -51,9 +52,11 @@ async function main() {
   const client = createClient(provider);
   const unsafe = (client as unknown as { getUnsafeApi: () => any }).getUnsafeApi();
 
-  const signer = await getHostSigner();  // worker has a worker-scoped signer
-  if (!signer) throw new Error("worker: no host signer");
-  const signerAddress = (signer as any).address ?? (signer as any).publicKey;
+  await ensureSignerConnected();
+  const account = signerManager.getState().accounts[0];
+  if (!account) throw new Error("worker: no signer account");
+  const signer = account.getSigner();
+  const signerAddress = account.address;
 
   // ---- chat room creation + closure on game-end events -------------------
   const evSub = unsafe.event.Revive.ContractEmitted.watch().subscribe({
@@ -61,7 +64,10 @@ async function main() {
       const contract: string = (ev.payload?.contract ?? "").toLowerCase();
       if (contract !== TAMBOLA_ADDRESS.toLowerCase()) return;
       const data:   `0x${string}`   = ev.payload.data?.asHex?.() ?? ev.payload.data;
-      const topics: `0x${string}`[] = (ev.payload.topics ?? []).map((t: any) => t.asHex?.() ?? t);
+      const topics = (ev.payload.topics ?? []).map((t: any) => t.asHex?.() ?? t) as [
+        signature: `0x${string}`,
+        ...args: `0x${string}`[],
+      ];
       let decoded: any;
       try { decoded = decodeEventLog({ abi: TAMBOLA_ABI as Abi, data, topics }); } catch { return; }
 
@@ -83,7 +89,7 @@ async function main() {
           }
         }
         active.set(key, {
-          startBlock:    decoded.args.startBlock as bigint,
+          startTime:     decoded.args.startTime as bigint,
           lastDrawBlock: 0n,
           state:         0,
           pendingTx:     false,
@@ -127,7 +133,7 @@ async function main() {
       for (const [key, g] of active) {
         if (g.state !== 0 && g.state !== 1) continue;
         if (g.pendingTx) continue;
-        if (blockNumber < g.startBlock) continue;
+        if (BigInt(Math.floor(Date.now() / 1000)) < g.startTime) continue;
         if (g.lastDrawBlock !== 0n && blockNumber < g.lastDrawBlock + BigInt(BLOCKS_BETWEEN_DRAWS)) continue;
 
         g.pendingTx = true;

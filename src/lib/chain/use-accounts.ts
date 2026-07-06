@@ -19,17 +19,22 @@ export function useAccounts() {
     return unsub;
   }, []);
 
-  const accounts: Account[] = (state.accounts ?? []) as Account[];
+  const accounts: Account[] = (state.accounts ?? []).map((a) => ({
+    address: a.address,
+    publicKey: a.publicKey,
+    name: a.name ?? undefined,
+    polkadotSigner: a.getSigner(),
+  }));
   const isReady =
     state.status === "connected" ? true :
-    state.status === "error"     ? false :
+    state.error != null          ? false :
     null;
 
   return {
     accounts,
     isLoading: isReady === null,
     isReady: isReady === true,
-    error: state.error as Error | undefined,
+    error: state.error ?? undefined,
     connect: ensureSignerConnected,
   };
 }

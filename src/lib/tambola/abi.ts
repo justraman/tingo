@@ -52,7 +52,7 @@ export const TAMBOLA_ABI = [
       components: [
         { name: "host",             type: "address" },
         { name: "ticketPrice",      type: "uint256" },
-        { name: "startBlock",       type: "uint64"  },
+        { name: "startTime",        type: "uint64"  },
         { name: "lastDrawBlock",    type: "uint64"  },
         { name: "maxPlayers",       type: "uint8"   },
         { name: "playerCount",      type: "uint8"   },
@@ -136,7 +136,7 @@ export const TAMBOLA_ABI = [
     inputs: [
       { name: "gameId",      type: "uint256", indexed: true  },
       { name: "host",        type: "address", indexed: true  },
-      { name: "startBlock",  type: "uint64",  indexed: false },
+      { name: "startTime",   type: "uint64",  indexed: false },
       { name: "ticketPrice", type: "uint256", indexed: false },
     ],
   },
@@ -196,7 +196,7 @@ export const GAME_STATES: GameState[] = ["Pending", "Live", "Won", "NoWinner"];
 export interface GameView {
   host: `0x${string}`;
   ticketPrice: bigint;
-  startBlock: bigint;
+  startTime: bigint;
   lastDrawBlock: bigint;
   maxPlayers: number;
   playerCount: number;

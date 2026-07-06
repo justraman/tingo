@@ -12,7 +12,7 @@ import { TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI } from "./abi";
 
 export type TambolaEvent =
-  | { name: "GameCreated";       args: { gameId: bigint; host: `0x${string}`; startBlock: bigint; ticketPrice: bigint } }
+  | { name: "GameCreated";       args: { gameId: bigint; host: `0x${string}`; startTime: bigint; ticketPrice: bigint } }
   | { name: "TicketBought";      args: { gameId: bigint; player: `0x${string}`; ticketId: bigint; hash: `0x${string}` } }
   | { name: "NumberDrawn";       args: { gameId: bigint; number: number; blockNumber: bigint } }
   | { name: "LineWon";           args: { gameId: bigint; line: number; winner: `0x${string}`; payout: bigint } }
@@ -32,7 +32,10 @@ export async function subscribeEvents(handler: (e: TambolaEvent) => void): Promi
       const contract: string = (ev.payload?.contract ?? "").toLowerCase();
       if (contract !== TAMBOLA_ADDRESS.toLowerCase()) return;
       const data:   `0x${string}`   = ev.payload.data?.asHex?.()   ?? ev.payload.data;
-      const topics: `0x${string}`[] = (ev.payload.topics ?? []).map((t: any) => t.asHex?.() ?? t);
+      const topics = (ev.payload.topics ?? []).map((t: any) => t.asHex?.() ?? t) as [
+        signature: `0x${string}`,
+        ...args: `0x${string}`[],
+      ];
       try {
         const decoded = decodeEventLog({ abi: TAMBOLA_ABI as Abi, data, topics });
         handler({ name: decoded.eventName, args: decoded.args } as unknown as TambolaEvent);

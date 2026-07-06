@@ -14,7 +14,7 @@ contract Tambola is ITambola {
     struct Game {
         address host;
         uint256 ticketPrice;     // wei (PAS has 10 decimals; pallet-revive treats it as 18 internally)
-        uint64  startBlock;
+        uint64  startTime;       // unix seconds; game opens for draws once block.timestamp reaches it
         uint64  lastDrawBlock;
         uint8   maxPlayers;
         uint8   playerCount;
@@ -49,7 +49,6 @@ contract Tambola is ITambola {
     uint16 public constant override FULLHOUSE_BPS        = 5000;  // 50 %
     uint16 public constant override LINE_BPS             = 1500;  // 15 % each
     uint16 public constant override HOST_BPS             = 500;   //  5 %
-    uint8  public constant override BLOCK_TIME_SECS      = 2;
     uint8  public constant override MAX_NUMBER           = 90;
 
     modifier nonReentrant() {
@@ -63,7 +62,7 @@ contract Tambola is ITambola {
     //  Host: schedule a game
     // ---------------------------------------------------------------------
 
-    /// @param startTimestamp unix seconds the host wants the game to start; converted to a block height.
+    /// @param startTimestamp unix seconds the host wants the game to start; stored as-is and gated on block.timestamp.
     /// @param ticketPrice    price per ticket in the chain's native token (wei units).
     function createGame(uint256 startTimestamp, uint256 ticketPrice) external override returns (uint256 gameId) {
         require(startTimestamp > block.timestamp, "start in past");
@@ -75,12 +74,9 @@ contract Tambola is ITambola {
         g.ticketPrice = ticketPrice;
         g.maxPlayers  = MAX_PLAYERS;
         g.state       = GameState.Pending;
+        g.startTime   = uint64(startTimestamp);
 
-        uint256 diff        = startTimestamp - block.timestamp;
-        uint64  blocksAhead = uint64((diff + BLOCK_TIME_SECS - 1) / BLOCK_TIME_SECS);
-        g.startBlock        = uint64(block.number) + blocksAhead;
-
-        emit GameCreated(gameId, msg.sender, g.startBlock, ticketPrice);
+        emit GameCreated(gameId, msg.sender, g.startTime, ticketPrice);
     }
 
     // ---------------------------------------------------------------------
@@ -92,7 +88,7 @@ contract Tambola is ITambola {
         Game storage g = _games[gameId];
         require(g.host != address(0),              "no game");
         require(g.state == GameState.Pending,      "not pending");
-        require(block.number < g.startBlock,       "already started");
+        require(block.timestamp < g.startTime,     "already started");
         require(msg.value == g.ticketPrice,        "wrong price");
         require(g.playerCount < g.maxPlayers,      "full");
         require(_playerTicketId[gameId][msg.sender] == 0, "already bought");
@@ -128,7 +124,7 @@ contract Tambola is ITambola {
         require(g.host != address(0),                                  "no game");
         require(g.state == GameState.Pending || g.state == GameState.Live, "ended");
         require(g.playerCount > 0,                                      "no players");
-        require(block.number >= g.startBlock,                           "not started");
+        require(block.timestamp >= g.startTime,                         "not started");
         require(block.number >= g.lastDrawBlock + BLOCKS_BETWEEN_DRAWS, "too soon");
         require(g.drawnOrder.length < MAX_NUMBER,                       "all drawn");
 
@@ -308,7 +304,7 @@ contract Tambola is ITambola {
         return GameView({
             host:             g.host,
             ticketPrice:      g.ticketPrice,
-            startBlock:       g.startBlock,
+            startTime:        g.startTime,
             lastDrawBlock:    g.lastDrawBlock,
             maxPlayers:       g.maxPlayers,
             playerCount:      g.playerCount,

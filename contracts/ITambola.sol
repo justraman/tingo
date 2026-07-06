@@ -26,7 +26,7 @@ interface ITambola {
     struct GameView {
         address host;
         uint256 ticketPrice;
-        uint64  startBlock;
+        uint64  startTime;
         uint64  lastDrawBlock;
         uint8   maxPlayers;
         uint8   playerCount;
@@ -44,7 +44,7 @@ interface ITambola {
     //  Events
     // ---------------------------------------------------------------------
 
-    event GameCreated(uint256 indexed gameId, address indexed host, uint64 startBlock, uint256 ticketPrice);
+    event GameCreated(uint256 indexed gameId, address indexed host, uint64 startTime, uint256 ticketPrice);
     event TicketBought(uint256 indexed gameId, address indexed player, uint256 ticketId, bytes32 hash);
     event NumberDrawn(uint256 indexed gameId, uint8 number, uint64 blockNumber);
     /// `line` ∈ {0: top, 1: middle, 2: bottom}.
@@ -58,8 +58,8 @@ interface ITambola {
     //  Mutating
     // ---------------------------------------------------------------------
 
-    /// Schedule a game. `startTimestamp` (unix seconds) is converted to a
-    /// block height assuming a fixed 6-second block time.
+    /// Schedule a game. `startTimestamp` (unix seconds) is stored as-is; the game
+    /// opens for draws once `block.timestamp` reaches it.
     function createGame(uint256 startTimestamp, uint256 ticketPrice) external returns (uint256 gameId);
 
     /// Buy a ticket. `layout` is the row-major 3x9 grid; `layout[row*9 + col]`
@@ -68,7 +68,7 @@ interface ITambola {
     function buyTicket(uint256 gameId, uint8[27] calldata layout) external payable;
 
     /// Draw the next number. Permissionless: anyone can call once
-    /// `block.number >= startBlock` AND
+    /// `block.timestamp >= startTime` AND
     /// `block.number >= lastDrawBlock + BLOCKS_BETWEEN_DRAWS`.
     function drawNumber(uint256 gameId) external;
 
@@ -104,6 +104,5 @@ interface ITambola {
     function FULLHOUSE_BPS()        external view returns (uint16);
     function LINE_BPS()             external view returns (uint16);
     function HOST_BPS()             external view returns (uint16);
-    function BLOCK_TIME_SECS()      external view returns (uint8);
     function MAX_NUMBER()           external view returns (uint8);
 }

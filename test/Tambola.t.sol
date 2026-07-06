@@ -8,10 +8,10 @@ import {ITambola} from "../contracts/ITambola.sol";
 /// Foundry tests for Tambola.sol.
 ///
 /// Covered scenarios:
-///   - createGame: bad timestamp / zero price / startBlock arithmetic
+///   - createGame: bad timestamp / zero price / startTime storage
 ///   - buyTicket:  layout validation (15 cells, 5/row, column ranges, monotone column, no dup),
 ///                 hash dedup, wrong price, double-buy, max-players, post-start rejection
-///   - drawNumber: gating by startBlock + BLOCKS_BETWEEN_DRAWS, end-state transitions
+///   - drawNumber: gating by startTime + BLOCKS_BETWEEN_DRAWS, end-state transitions
 ///   - payouts:    line wins credit withdrawable; full-house credits winner + host;
 ///                 unclaimed lines roll into full-house share; sum stays ≤ pot
 ///   - withdraw:   pulls credited balance, reentrancy guard
@@ -79,7 +79,7 @@ contract TambolaTest is Test {
 
     function _advanceToStart(uint256 gameId) internal {
         ITambola.GameView memory g = tambola.getGame(gameId);
-        vm.roll(g.startBlock);
+        vm.warp(g.startTime);
     }
 
     function _advanceBlocks(uint256 n) internal {
@@ -102,10 +102,9 @@ contract TambolaTest is Test {
         tambola.createGame(block.timestamp + 60, 0);
     }
 
-    function test_createGame_emitsEventAndComputesStartBlock() public {
+    function test_createGame_emitsEventAndStoresStartTime() public {
         uint256 startTs = block.timestamp + 60;        // 60 s ahead
-        uint256 expectedAhead = 60 / tambola.BLOCK_TIME_SECS(); // 30 with 2 s blocks
-        uint64  expectedStart = uint64(block.number) + uint64(expectedAhead);
+        uint64  expectedStart = uint64(startTs);
 
         vm.expectEmit(true, true, false, true);
         emit ITambola.GameCreated(1, host, expectedStart, TICKET_PRICE);
@@ -114,7 +113,7 @@ contract TambolaTest is Test {
         assertEq(gid, 1);
 
         ITambola.GameView memory g = tambola.getGame(1);
-        assertEq(g.startBlock, expectedStart);
+        assertEq(g.startTime, expectedStart);
         assertEq(g.ticketPrice, TICKET_PRICE);
         assertEq(g.host, host);
         assertEq(uint8(g.state), uint8(ITambola.GameState.Pending));
@@ -184,7 +183,7 @@ contract TambolaTest is Test {
     }
 
     function test_buyTicket_rejectsAfterStart() public {
-        uint256 gid = _createGame(4);                     // ~2 blocks ahead with 2 s blocks
+        uint256 gid = _createGame(4);                     // starts 4 s from now
         _advanceToStart(gid);
         vm.prank(alice);
         vm.expectRevert(bytes("already started"));
