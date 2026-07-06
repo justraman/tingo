@@ -14,7 +14,7 @@ export function roomIdForGame(gameId: bigint): string {
 export async function sendChat(gameId: bigint, text: string) {
   const mgr = await getChatManager();
   if (!mgr) throw new Error("chat manager unavailable (not in host?)");
-  await mgr.sendMessage(roomIdForGame(gameId), { tag: "Text", value: text });
+  await mgr.sendMessage(roomIdForGame(gameId), { tag: "Text", value: { text } });
 }
 
 let subscribed = false;
@@ -31,8 +31,8 @@ export async function attachChatSubscription() {
     if (action.payload?.value?.tag !== "Text")    return;
     const gameId = BigInt(action.roomId.slice("tambola-".length));
     useChatStore.getState().append(gameId, {
-      from: action.from ?? action.sender ?? "anon",
-      text: action.payload.value.value,
+      from: action.peer ?? "anon",
+      text: action.payload.value.value.text,
       ts: Date.now(),
     });
   });

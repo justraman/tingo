@@ -74,20 +74,24 @@ win/no-winner; subscribes to best block and pokes `drawNumber` once past `startB
 
 ---
 
-## 🟡 In progress — contract deploy to paseo-next-v2
+## 🟡 In progress — CDM registry/metadata publish
 
-`playground contract deploy --signer dev` gets all the way through build (resolc
-compiles, `@tambola/tambola` recognized) and fails only at the **registry submission
-network call** (`Error: error sending request for url`) — the same transient
-flaky-network class that plagued the resolc download, **not** a code/config problem. The
-build and PVM artifact are valid.
+**The contract is deployed and verified live** at
+`0xfea8d62be71219653740fd70fbf74fc0f3a2641b` (recorded in `.env.local`; smoke-tested —
+`nextGameId` returns `0` through the app's own `ReviveApi.call` dry-run path). The
+package `@tambola/tambola` is owned by the dev signer
+(H160 `0x35cdb23ff7fc86e8dccd577ca309bfea9c978d20` = keccak(pubkey)[12..]) — deploys
+**must** use `--signer dev`; the logged-in phone account gets an ownership error.
 
-**Next step:** retry the deploy, then capture the printed H160 into `.env.local` as
-`NEXT_PUBLIC_TAMBOLA_ADDRESS`.
+What's still failing is the **Bulletin metadata publish** step: the paseo-next-v2
+Bulletin chain stalled (no blocks since 2026-07-06 15:11 UTC as of this writing), so
+the publish tx times out after 300s. Not a code problem — retry when Bulletin produces
+blocks again. **Each retry deploys a fresh contract instance** (a second one exists at
+`0x363258b2bea4b1fb58c92af9c06ddd43c23ea93a`); after a successful retry, update
+`.env.local` to whichever address the registry records.
 
 ```bash
-export PATH="$HOME/.foundry-polkadot/bin:$PATH"
-playground contract deploy --signer dev --env paseo-next-v2     # retry until the registry call succeeds
+playground contract deploy --signer dev     # --env was removed from `contract deploy` in CLI ≥0.34
 ```
 
 ---
@@ -96,12 +100,13 @@ playground contract deploy --signer dev --env paseo-next-v2     # retry until th
 
 1. ~~**Reconcile the network constants**~~ — done. Genesis (#1), block time (#2), and
    `BLOCKS_BETWEEN_DRAWS` (#3) all reconciled and verified against the live chain.
-2. **Land the contract deploy** — retry until the registry call goes through; record the
-   H160 in `.env.local`.
-3. **Generate PAPI descriptors** (`bun run papi:add`) for the typed `api.tx.Revive.*` /
-   `api.query.*` paths (reads currently work via viem + `ReviveApi.call` without them).
-4. **Wire the deployed address** and smoke-test reads (`getGame`, `nextGameId`) via the
-   dev server, then a full create→buy→draw→win loop with dev accounts.
+2. ~~**Land the contract deploy**~~ — done; live + smoke-tested at
+   `0xfea8d62be71219653740fd70fbf74fc0f3a2641b` (`.env.local`). Only the Bulletin
+   metadata publish is pending (chain stalled — see In progress).
+3. ~~**Generate PAPI descriptors**~~ — done (`.papi/` + `@polkadot-api/descriptors`
+   wired into package.json; build green).
+4. **Full create→buy→draw→win loop** with dev accounts against the live contract
+   (reads already verified; writes fixed for PAPI v2 but not yet exercised on-chain).
 5. ~~**Fix the worker signer**~~ — done; worker uses the shared `SignerManager`. Verify
    it signs correctly inside the host worker sandbox (To-do #7).
 6. **Deploy frontend + worker** to Bulletin/IPFS+DotNS (`bun run build && playground
@@ -109,9 +114,15 @@ playground contract deploy --signer dev --env paseo-next-v2     # retry until th
 7. **Verify in the Polkadot Desktop host** — host detection, wallet injection, chat room
    lifecycle (created on `GameCreated`, closed on `GameWon`/`GameEndedNoWinner`),
    `ReviveApi.call` reads with no direct-fetch.
-8. **Confirm SDK symbol names** against installed `@parity/product-sdk-*`
-   (`getChatManager`, `getHostProvider`, `registerRoom` vs `createRoom`, `SignerManager`,
-   `isInsideContainer*`); adjust imports where the live API differs.
+8. ~~**Confirm SDK symbol names**~~ — done (2026-07-06). Upgraded to
+   `product-sdk-signer 0.9.0` / `product-sdk-host 0.12.0` / `chain-client 0.7.7` and
+   reconciled: `SignerManager` now uses a `HostProvider` with
+   `productAccount: { dotNsIdentifier }` (products get app-scoped **product
+   accounts**, not host wallet accounts — the 0.4.0 default yielded "No accounts
+   available from host provider"); chat `sendMessage` payload is
+   `{ tag: "Text", value: { text } }` and received actions carry `peer` +
+   `payload.value.value.text`. Identifier derives from `window.location`
+   (localhost dev) or falls back to `tambola-game.dot`.
 9. **End-to-end on-chain test** — 2–3 dev accounts: line wins fire, full house ends +
    pays, balances move via `withdraw`, and the no-winner refund path.
 
@@ -145,6 +156,18 @@ playground contract deploy --signer dev --env paseo-next-v2     # retry until th
    bitmaps, not the grid — by design.
 10. **RNG caveat:** `block.prevrandao` is influenceable by a participating block author.
     Testnet-acceptable; use commit-reveal / VRF for mainnet.
+11. **PAPI v2 value shapes (fixed 2026-07-06).** With polkadot-api 2.x against this
+    runtime's metadata, `H160`/`H256` values are **hex strings** (passing `Binary`
+    throws `Incompatible runtime entry`), and `Bytes` results decode to `Uint8Array`
+    (no `.asHex()`). `read.ts`, `write.ts`, `events.ts`, and the worker now use
+    hex-string dests and `bytesToHex` on results/event data.
+12. **Dry-run origin must be mapped.** The runtime rejects `ReviveApi.call` dry-runs
+    from origins without a `Revive.map_account` mapping (`AccountUnmapped`, module
+    error 0x2b). `READ_ONLY_ORIGIN` is now the dev deploy signer (mapped at deploy
+    time). If the chain resets, re-deploying re-maps it.
+13. **`is-mapped` check.** `write.ts` decides whether to batch `map_account` by querying
+    `Revive.OriginalAccount(keccak(pubkey)[12..])` — `map_account` reverts for
+    already-mapped accounts and would fail the whole `batch_all`.
 
 ---
 

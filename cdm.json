@@ -1,14 +1,4 @@
 {
   "name": "tambola",
-  "version": "0.1.0",
-  "targets": [
-    {
-      "kind": "solidity",
-      "path": "contracts/Tambola.sol",
-      "contract": "Tambola",
-      "solcVersion": "0.8.24",
-      "optimizer": { "enabled": true, "runs": 200 },
-      "outputDir": "abi"
-    }
-  ]
+  "version": "0.1.0"
 }

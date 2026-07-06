@@ -5,10 +5,11 @@
  * observable.
  */
 
-import { encodeFunctionData, type Abi } from "viem";
+import { bytesToHex, decodeErrorResult, encodeFunctionData, type Abi } from "viem";
 import { Binary, type PolkadotSigner } from "polkadot-api";
+import { ss58ToH160 } from "@parity/product-sdk-address";
 import { getClient } from "@/lib/chain/client";
-import { TAMBOLA_ADDRESS } from "@/lib/chain/constants";
+import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI } from "./abi";
 import type { TicketLayout } from "./encode";
 
@@ -26,20 +27,32 @@ async function buildContractCall(
   const unsafe = (client as unknown as { getUnsafeApi: () => any }).getUnsafeApi();
 
   const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName, args });
-  const destBin  = Binary.fromHex(TAMBOLA_ADDRESS.toLowerCase());
-  const dataBin  = Binary.fromHex(calldata);
+  // PAPI v2 + metadata v16: H160 params are hex strings, not Binary.
+  const dest    = TAMBOLA_ADDRESS.toLowerCase() as `0x${string}`;
+  const dataBin = Binary.fromHex(calldata);
 
-  // Dry run to estimate weight + storage deposit.
+  // Map the account if it hasn't been mapped already. map_account reverts for
+  // already-mapped accounts, which would fail the whole batch_all.
+  const h160 = ss58ToH160(signerAddress);
+  const isMapped = (await unsafe.query.Revive.OriginalAccount.getValue(h160)) !== undefined;
+
+  // The runtime rejects dry-runs from unmapped origins (AccountUnmapped), so
+  // estimate with the known-mapped read origin until this account is mapped.
+  const dryRunOrigin = isMapped ? signerAddress : READ_ONLY_ORIGIN;
   const dryRun = await unsafe.apis.ReviveApi.call(
-    signerAddress,
-    destBin,
+    dryRunOrigin,
+    dest,
     value,
     undefined,
     undefined,
     dataBin,
   );
-  if (!dryRun.result.success) throw new Error(`dry-run failed for ${functionName}`);
-  if (dryRun.result.value.flags & 1) throw new Error(`contract reverted (${functionName})`);
+  if (!dryRun.result.success) {
+    throw new Error(`dry-run failed for ${functionName}: ${describeDispatchError(dryRun.result.value)}`);
+  }
+  if (dryRun.result.value.flags & 1) {
+    throw new Error(`contract reverted (${functionName}): ${decodeRevertReason(dryRun.result.value.data)}`);
+  }
 
   const weightLimit = {
     ref_time:    dryRun.weight_required.ref_time   * GAS_MULTIPLIER,
@@ -48,19 +61,12 @@ async function buildContractCall(
   const storageDepositLimit = dryRun.storage_deposit?.value;
 
   const reviveCall = unsafe.tx.Revive.call({
-    dest: destBin,
+    dest,
     value,
     weight_limit: weightLimit,
     storage_deposit_limit: storageDepositLimit,
     data: dataBin,
   });
-
-  // Map the account if it hasn't been mapped already.
-  let isMapped = false;
-  try {
-    isMapped = await (client as unknown as { inkSdk?: { addressIsMapped: (a: string) => Promise<boolean> } })
-      .inkSdk?.addressIsMapped?.(signerAddress) ?? false;
-  } catch { /* fallthrough */ }
 
   if (!isMapped) {
     const mapCall = unsafe.tx.Revive.map_account();
@@ -69,6 +75,51 @@ async function buildContractCall(
     });
   }
   return reviveCall;
+}
+
+// Revert data is ABI-encoded — Error(string) for require messages, Panic(uint)
+// for asserts. viem decodes both without needing error entries in our ABI.
+function decodeRevertReason(raw: any): string {
+  try {
+    const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
+    const decoded = decodeErrorResult({ abi: TAMBOLA_ABI as Abi, data });
+    return `${decoded.errorName}(${(decoded.args ?? []).map(String).join(", ")})`;
+  } catch {
+    return "unknown reason";
+  }
+}
+
+function describeDispatchError(error: unknown): string {
+  try {
+    return JSON.stringify(error, (_, v) => (typeof v === "bigint" ? v.toString() : v));
+  } catch {
+    return String(error);
+  }
+}
+
+// The runtime reports "can't pay fees" as an Invalid/Payment validity error;
+// depending on the papi version it lands on the error object or as JSON in
+// `.message` (same heuristic as dotli-starter).
+function isInsufficientFundsError(e: any): boolean {
+  if (!e) return false;
+  if (e.type === "Invalid" && e.value?.type === "Payment") return true;
+  if (typeof e.message === "string") {
+    try {
+      const parsed = JSON.parse(e.message);
+      if (parsed?.type === "Invalid" && parsed?.value?.type === "Payment") return true;
+    } catch { /* fall through to substring check */ }
+    return /"Invalid"[\s\S]*"Payment"/.test(e.message);
+  }
+  return false;
+}
+
+function normalizeTxError(e: unknown): Error {
+  if (isInsufficientFundsError(e)) {
+    return new Error(
+      "Your account can't pay the transaction fee — top it up at faucet.polkadot.io (Asset Hub) and retry.",
+    );
+  }
+  return e instanceof Error ? e : new Error(String(e));
 }
 
 export async function watchTransaction(
@@ -96,7 +147,7 @@ export async function watchTransaction(
             sub.unsubscribe();
           }
         },
-        error: (e: any) => { sub.unsubscribe(); reject(e); },
+        error: (e: any) => { sub.unsubscribe(); reject(normalizeTxError(e)); },
       });
   });
 }

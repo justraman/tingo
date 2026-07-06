@@ -107,12 +107,12 @@ bun run build && playground deploy --signer dev --domain tambola-game --buildDir
 
 ## Open issues to respect (details in ARCHITECTURE.md §9)
 
-- Genesis hash in `constants.ts` differs from TrUAPI's `PASEO_NEXT_V2_ASSET_HUB` —
-  reconcile before trusting host-mode provider.
-- Block time 2 (contract) vs 6 (interface doc + `constants.ts`) — pick one.
-- Worker imports `getHostSigner`, which the installed SDK does not export — use
-  `getAccountsProvider` / `getTruApi().signing` / `@parity/product-sdk-signer`.
-- Contract not deployed yet; address is the zero address.
+- PAPI v2 + this runtime: `H160` args are hex strings (never `Binary`), `Bytes`
+  results are `Uint8Array`, and dry-run origins must be revive-mapped accounts.
+- Contract deploys must use `--signer dev` — the CDM package `@tambola/tambola` is
+  owned by the dev signer's mapped H160. Each deploy creates a fresh instance; keep
+  `.env.local` pointing at the one you mean.
+- Bulletin metadata publish pending (testnet Bulletin chain stalled 2026-07-06).
 
 ## Definition of done for a change
 

@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
-import { useChatStore } from "@/lib/store/chat";
+import { useChatStore, type ChatMessage } from "@/lib/store/chat";
 import { attachChatSubscription, sendChat } from "@/lib/chat/manager";
 import { shortenAddress } from "@/lib/utils";
 
@@ -15,8 +15,12 @@ interface Props {
   disabled?: boolean;       // game ended — read-only
 }
 
+// Stable fallback: `?? []` in a selector mints a fresh array every render,
+// which useSyncExternalStore treats as an ever-changing snapshot (infinite loop).
+const NO_MESSAGES: ChatMessage[] = [];
+
 export function ChatPanel({ gameId, disabled }: Props) {
-  const messages = useChatStore((s) => s.byId[gameId.toString()] ?? []);
+  const messages = useChatStore((s) => s.byId[gameId.toString()] ?? NO_MESSAGES);
   const isClosed = useChatStore((s) => s.closed[gameId.toString()] ?? false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

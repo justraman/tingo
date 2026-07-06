@@ -7,17 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useAccounts } from "@/lib/chain/use-accounts";
+import { WalletStatus } from "@/components/WalletStatus";
 import { useWalletStore } from "@/lib/store/wallet";
 import { callCreateGame } from "@/lib/tambola/write";
 import { parsePlanck } from "@/lib/utils";
 import { CHAIN } from "@/lib/chain/constants";
+
+function toDatetimeLocalValue(d: Date): string {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
 
 export default function NewGamePage() {
   const { accounts, isReady } = useAccounts();
   const selected = useWalletStore((s) => s.selectedAddress) ?? accounts[0]?.address;
   const router = useRouter();
 
-  const defaultStart = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16);
+  // datetime-local wants wall-clock local time; toISOString() would shift it to UTC.
+  const defaultStart = toDatetimeLocalValue(new Date(Date.now() + 5 * 60 * 1000));
   const [start,  setStart]  = useState<string>(defaultStart);
   const [price,  setPrice]  = useState<string>("1");
   const [status, setStatus] = useState<string>("");
@@ -31,7 +37,11 @@ export default function NewGamePage() {
       if (!account) throw new Error("No wallet account available");
 
       const startTs    = BigInt(Math.floor(new Date(start).getTime() / 1000));
+      if (startTs <= BigInt(Math.floor(Date.now() / 1000))) {
+        throw new Error("Start time must be in the future.");
+      }
       const priceWei   = parsePlanck(price, CHAIN.decimals);
+      if (priceWei <= 0n) throw new Error("Ticket price must be greater than zero.");
       await callCreateGame({
         signerAddress: account.address,
         signer: account.polkadotSigner as any,
@@ -73,6 +83,7 @@ export default function NewGamePage() {
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-2">
           <Button onClick={submit} disabled={busy || !isReady}>{busy ? `Working… ${status}` : "Create game"}</Button>
+          <WalletStatus />
           {error && <div className="text-sm text-destructive">{error}</div>}
         </CardFooter>
       </Card>

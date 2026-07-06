@@ -18,14 +18,15 @@
  */
 
 import { createClient, Binary } from "polkadot-api";
-import { encodeFunctionData, decodeEventLog, type Abi } from "viem";
+import { bytesToHex, encodeFunctionData, decodeEventLog, type Abi } from "viem";
 import {
   getChatManager,
   getHostProvider,
 } from "@parity/product-sdk-host";
 
+import { ss58ToH160 } from "@parity/product-sdk-address";
 import { TAMBOLA_ABI } from "../src/lib/tambola/abi";
-import { TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
+import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
 import { ensureSignerConnected, signerManager } from "../src/lib/chain/signer";
 
 const BLOCKS_BETWEEN_DRAWS = 5;   // mirror Tambola.BLOCKS_BETWEEN_DRAWS
@@ -58,13 +59,17 @@ async function main() {
   const signer = account.getSigner();
   const signerAddress = account.address;
 
+  // PAPI v2 + metadata v16: H160/H256 fields are hex strings, Bytes are Uint8Array.
+  const toHexString = (v: any): `0x${string}` =>
+    typeof v === "string" ? (v as `0x${string}`) : v?.asHex?.() ?? bytesToHex(v);
+
   // ---- chat room creation + closure on game-end events -------------------
   const evSub = unsafe.event.Revive.ContractEmitted.watch().subscribe({
     next: async (ev: any) => {
-      const contract: string = (ev.payload?.contract ?? "").toLowerCase();
+      const contract = toHexString(ev.payload?.contract ?? "0x").toLowerCase();
       if (contract !== TAMBOLA_ADDRESS.toLowerCase()) return;
-      const data:   `0x${string}`   = ev.payload.data?.asHex?.() ?? ev.payload.data;
-      const topics = (ev.payload.topics ?? []).map((t: any) => t.asHex?.() ?? t) as [
+      const data = toHexString(ev.payload.data);
+      const topics = (ev.payload.topics ?? []).map(toHexString) as [
         signature: `0x${string}`,
         ...args: `0x${string}`[],
       ];
@@ -84,7 +89,7 @@ async function main() {
           if (status === "New") {
             await chat.sendMessage(roomId(gameId), {
               tag: "Text",
-              value: `Welcome to Tambola #${gameId.toString()}. Good luck! 🎯`,
+              value: { text: `Welcome to Tambola #${gameId.toString()}. Good luck! 🎯` },
             });
           }
         }
@@ -105,7 +110,7 @@ async function main() {
         if (chat) {
           await chat.sendMessage(roomId(gameId), {
             tag: "Text",
-            value: `🏆 Full house! Game over.`,
+            value: { text: `🏆 Full house! Game over.` },
           });
         }
         const a = active.get(key); if (a) a.state = 2;
@@ -114,7 +119,7 @@ async function main() {
         if (chat) {
           await chat.sendMessage(roomId(gameId), {
             tag: "Text",
-            value: `Game ended without a full house — refunds available.`,
+            value: { text: `Game ended without a full house — refunds available.` },
           });
         }
         const a = active.get(key); if (a) a.state = 3;
@@ -160,16 +165,21 @@ async function pokeDraw(unsafe: any, signer: any, signerAddress: string, gameId:
     functionName: "drawNumber",
     args: [gameId],
   });
-  const dest = Binary.fromHex(TAMBOLA_ADDRESS.toLowerCase());
+  // PAPI v2 + metadata v16: H160 params are hex strings, not Binary.
+  const dest = TAMBOLA_ADDRESS.toLowerCase() as `0x${string}`;
   const data = Binary.fromHex(calldata);
 
+  // The runtime rejects both dry-runs and calls from unmapped origins.
+  const h160 = ss58ToH160(signerAddress);
+  const isMapped = (await unsafe.query.Revive.OriginalAccount.getValue(h160)) !== undefined;
+
   const dryRun = await unsafe.apis.ReviveApi.call(
-    signerAddress, dest, 0n, undefined, undefined, data,
+    isMapped ? signerAddress : READ_ONLY_ORIGIN, dest, 0n, undefined, undefined, data,
   );
   if (!dryRun.result.success) throw new Error("draw dry-run failed");
   if (dryRun.result.value.flags & 1) throw new Error("draw reverted");
 
-  const tx = unsafe.tx.Revive.call({
+  const reviveCall = unsafe.tx.Revive.call({
     dest,
     value: 0n,
     weight_limit: {
@@ -179,6 +189,11 @@ async function pokeDraw(unsafe: any, signer: any, signerAddress: string, gameId:
     storage_deposit_limit: dryRun.storage_deposit?.value,
     data,
   });
+  const tx = isMapped
+    ? reviveCall
+    : unsafe.tx.Utility.batch_all({
+        calls: [unsafe.tx.Revive.map_account().decodedCall, reviveCall.decodedCall],
+      });
 
   await new Promise<void>((resolve, reject) => {
     const sub = tx.signSubmitAndWatch(signer, { mortality: { mortal: true, period: 256 } }).subscribe({

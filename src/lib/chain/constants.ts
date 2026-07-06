@@ -15,4 +15,7 @@ export const CHAIN = {
 export const TAMBOLA_ADDRESS =
   (process.env.NEXT_PUBLIC_TAMBOLA_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
 
-export const READ_ONLY_ORIGIN = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM";
+// Must be an account with an existing Revive mapping: the runtime rejects even
+// dry-run calls from unmapped origins (AccountUnmapped). The dev deploy signer
+// is mapped as a side effect of deploying the contract.
+export const READ_ONLY_ORIGIN = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";

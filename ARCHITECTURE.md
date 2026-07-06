@@ -370,9 +370,12 @@ recorded so they are not rediscovered later.
 4. ~~**`getHostSigner` does not exist**~~ **Resolved.** The worker now signs via the
    shared `SignerManager` (`@parity/product-sdk-signer`) from `src/lib/chain/signer.ts`
    — `account.getSigner()` yields the `PolkadotSigner`. Needs live-host verification (§9.7).
-5. **Not yet deployed.** `NEXT_PUBLIC_TAMBOLA_ADDRESS` is the zero address; PAPI typed
-   descriptors aren't generated. Reads/writes lean on viem-encoded `ReviveApi.call`,
-   which works without descriptors, but the typed `api.tx.Revive.*` paths need them.
+5. ~~**Not yet deployed.**~~ **Resolved (2026-07-06).** Live at
+   `0xfea8d62be71219653740fd70fbf74fc0f3a2641b` (`.env.local`), descriptors generated
+   (`.papi/`). Two runtime gotchas surfaced and fixed: PAPI v2 wants `H160` values as
+   hex strings (not `Binary`) and returns `Bytes` as `Uint8Array`; and dry-run origins
+   must be `map_account`-mapped (`READ_ONLY_ORIGIN` is now the mapped dev signer).
+   Bulletin metadata publish still pending (chain stalled) — see PROGRESS.md.
 6. **Cold-load payout amount.** A finished game shows the winner but not the payout
    amount on first load (amounts live in past events); backfill via a historical scan.
 7. **RNG caveat.** `block.prevrandao` is influenceable by a participating block author

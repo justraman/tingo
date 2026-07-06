@@ -8,8 +8,9 @@
  * a viem PublicClient).
  */
 
-import { encodeFunctionData, decodeFunctionResult, type Abi } from "viem";
+import { encodeFunctionData, decodeFunctionResult, bytesToHex, type Abi } from "viem";
 import { Binary } from "polkadot-api";
+import { toH160 } from "@parity/product-sdk-address";
 import { getClient } from "@/lib/chain/client";
 import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI, type GameView, type TicketView } from "./abi";
@@ -23,9 +24,10 @@ async function readContract<T = unknown>(functionName: string, args: Args = []):
 
   const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName, args });
 
+  // PAPI v2 + metadata v16: H160 params are hex strings, Bytes results are Uint8Array.
   const dryRun = await unsafe.apis.ReviveApi.call(
     READ_ONLY_ORIGIN,
-    Binary.fromHex(TAMBOLA_ADDRESS.toLowerCase()),
+    TAMBOLA_ADDRESS.toLowerCase(),
     0n,
     undefined,
     undefined,
@@ -35,7 +37,8 @@ async function readContract<T = unknown>(functionName: string, args: Args = []):
   if (!dryRun.result.success) throw new Error(`dry-run failed for ${functionName}`);
   if (dryRun.result.value.flags & 1) throw new Error(`contract reverted in ${functionName}`);
 
-  const data = dryRun.result.value.data.asHex() as `0x${string}`;
+  const raw = dryRun.result.value.data;
+  const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
   return decodeFunctionResult({ abi: TAMBOLA_ABI as Abi, functionName, data }) as T;
 }
 
@@ -52,14 +55,15 @@ export const readDrawnNumbers = (gameId: bigint) =>
 export const readTickets = (gameId: bigint) =>
   readContract<readonly TicketView[]>("getTickets", [gameId]).then((arr) => Array.from(arr));
 
-export const readTicketByOwner = (gameId: bigint, player: `0x${string}`) =>
-  readContract<readonly [bigint, TicketView]>("getTicketByOwner", [gameId, player]);
+// Player params take SS58 or H160 — the contract only knows H160.
+export const readTicketByOwner = (gameId: bigint, player: string) =>
+  readContract<readonly [bigint, TicketView]>("getTicketByOwner", [gameId, toH160(player)]);
 
 export const readIsTicketHashUsed = (gameId: bigint, hash: `0x${string}`) =>
   readContract<boolean>("isTicketHashUsed", [gameId, hash]);
 
-export const readIsRefundClaimed = (gameId: bigint, player: `0x${string}`) =>
-  readContract<boolean>("isRefundClaimed", [gameId, player]);
+export const readIsRefundClaimed = (gameId: bigint, player: string) =>
+  readContract<boolean>("isRefundClaimed", [gameId, toH160(player)]);
 
-export const readWithdrawable = (account: `0x${string}`) =>
-  readContract<bigint>("withdrawable", [account]);
+export const readWithdrawable = (account: string) =>
+  readContract<bigint>("withdrawable", [toH160(account)]);

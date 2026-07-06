@@ -11,6 +11,7 @@ import { NumberBoard } from "@/components/NumberBoard";
 import { Countdown } from "@/components/Countdown";
 import { TicketGenerator } from "@/components/TicketGenerator";
 import { ChatPanel } from "@/components/ChatPanel";
+import { WalletStatus } from "@/components/WalletStatus";
 import { WinnerBanner } from "@/components/WinnerBanner";
 
 import { useAccounts } from "@/lib/chain/use-accounts";
@@ -96,11 +97,11 @@ function GamePage() {
     let cancel = false;
     (async () => {
       try {
-        const [id, ticket] = await readTicketByOwner(gameId, selected as `0x${string}`);
+        const [id, ticket] = await readTicketByOwner(gameId, selected);
         if (cancel) return;
         setMyTicket(id > 0n ? ticket : null);
-        if (snap?.noWinner) setRefundClaimed(await readIsRefundClaimed(gameId, selected as `0x${string}`));
-        setWithdrawableAmt(await readWithdrawable(selected as `0x${string}`));
+        if (snap?.noWinner) setRefundClaimed(await readIsRefundClaimed(gameId, selected));
+        setWithdrawableAmt(await readWithdrawable(selected));
       } catch (e) { console.error(e); }
     })();
     return () => { cancel = true; };
@@ -150,7 +151,7 @@ function GamePage() {
         // Refresh game scalars asynchronously.
         readGame(gameId).then((g) => setGame(gameId, { game: g })).catch(() => { /* ignore */ });
         if (selected) {
-          readWithdrawable(selected as `0x${string}`).then(setWithdrawableAmt).catch(() => {});
+          readWithdrawable(selected).then(setWithdrawableAmt).catch(() => {});
         }
       });
     })();
@@ -178,7 +179,7 @@ function GamePage() {
         onStatus: (s) => setStatus(s),
       });
       markBought(gameId);
-      const [id, t] = await readTicketByOwner(gameId, account.address as `0x${string}`);
+      const [id, t] = await readTicketByOwner(gameId, account.address);
       setMyTicket(id > 0n ? t : null);
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -199,7 +200,7 @@ function GamePage() {
         onStatus: (s) => setStatus(s),
       });
       setRefundClaimed(true);
-      setWithdrawableAmt(await readWithdrawable(account.address as `0x${string}`));
+      setWithdrawableAmt(await readWithdrawable(account.address));
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -281,14 +282,17 @@ function GamePage() {
         )}
 
         {!myTicket && game.state === 0 && (
-          <TicketGenerator
-            gameId={gameId}
-            ticketPrice={game.ticketPrice}
-            tokenSymbol={CHAIN.symbol}
-            decimals={CHAIN.decimals}
-            disabled={busy || !isReady}
-            onBuy={onBuy}
-          />
+          <>
+            <WalletStatus />
+            <TicketGenerator
+              gameId={gameId}
+              ticketPrice={game.ticketPrice}
+              tokenSymbol={CHAIN.symbol}
+              decimals={CHAIN.decimals}
+              disabled={busy || !isReady}
+              onBuy={onBuy}
+            />
+          </>
         )}
 
         {myTicket && draft && (

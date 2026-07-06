@@ -32,6 +32,7 @@ export function useAccounts() {
 
   return {
     accounts,
+    status: state.status,
     isLoading: isReady === null,
     isReady: isReady === true,
     error: state.error ?? undefined,
