@@ -1,18 +1,35 @@
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccounts } from "@/lib/chain/use-accounts";
 import { shortenAddress } from "@/lib/utils";
-import { Wallet } from "lucide-react";
+import { Check, Wallet } from "lucide-react";
 
 /** One-line wallet connection state + retry, shown wherever a signer gate disables actions. */
 export function WalletStatus() {
   const { isReady, accounts, status, error, connect } = useAccounts();
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   if (isReady && accounts.length > 0) {
+    const address = accounts[0].address;
+    const copyAddress = async () => {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 1500);
+    };
     return (
-      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-xl">
-        <Wallet className="h-3.5 w-3.5 text-emerald-400" />
-        <span className="font-mono">{shortenAddress(accounts[0].address, 8, 6)}</span>
-      </div>
+      <button
+        type="button"
+        onClick={() => void copyAddress()}
+        title={`${address} — click to copy`}
+        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-xl transition-colors hover:bg-white/[0.1]"
+      >
+        {copied
+          ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+          : <Wallet className="h-3.5 w-3.5 text-emerald-400" />}
+        <span className="font-mono">{copied ? "Copied" : shortenAddress(address, 8, 6)}</span>
+      </button>
     );
   }
   if (isReady) {

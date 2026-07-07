@@ -4,8 +4,8 @@
  *
  * Hosts don't enumerate wallet accounts for products — each product gets an
  * app-scoped *product account* derived from its DotNS identifier (the pattern
- * in paritytech/playground-app and dotli-starter). Localhost dev keeps the
- * `host:port` identifier; deployed builds use the registered `.dot` name.
+ * in paritytech/playground-app and dotli-starter). Localhost dev uses a fixed
+ * `localhost` identifier; deployed builds use the registered `.dot` name.
  */
 
 import { HostProvider, SignerManager } from "@parity/product-sdk-signer";
@@ -14,24 +14,11 @@ import { isHostAsync } from "@/lib/host/detect";
 
 const DEPLOYED_DOTNS = "tambola-game.dot";
 
-function selfDotNsIdentifier(): string {
-  if (typeof window === "undefined") return DEPLOYED_DOTNS;
-  const hostname = window.location.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost")) {
-    return window.location.host.toLowerCase();
-  }
-  if (hostname.endsWith(".dot")) {
-    const segments = hostname.split(".");
-    return segments.length > 2 ? segments.slice(-2).join(".") : hostname;
-  }
-  return DEPLOYED_DOTNS;
-}
-
 export const signerManager = new SignerManager({
   dappName: "tambola",
   createProvider: () =>
     new HostProvider({
-      productAccount: { dotNsIdentifier: selfDotNsIdentifier(), requestName: false },
+      productAccount: { dotNsIdentifier: DEPLOYED_DOTNS, requestName: false },
     }),
 });
 

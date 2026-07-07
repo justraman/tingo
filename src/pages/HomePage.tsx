@@ -117,7 +117,6 @@ export function HomePage() {
             On-chain Tambola · {CHAIN.symbol} on Asset Hub
           </p>
         </div>
-        <Link href="/host/new"><Button size="lg">Schedule a game</Button></Link>
       </div>
 
       {loading && (
