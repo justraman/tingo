@@ -12,8 +12,10 @@ import { encodeFunctionData, decodeFunctionResult, bytesToHex, type Abi } from "
 import { Binary } from "polkadot-api";
 import { toH160 } from "@parity/product-sdk-address";
 import { getClient } from "@/lib/chain/client";
-import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
+import { NATIVE_TO_ETH_RATIO, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI, type GameView, type TicketView } from "./abi";
+
+const weiToPlanck = (wei: bigint) => wei / NATIVE_TO_ETH_RATIO;
 
 type Args = readonly unknown[];
 
@@ -47,7 +49,11 @@ async function readContract<T = unknown>(functionName: string, args: Args = []):
 export const readNextGameId = () => readContract<bigint>("nextGameId");
 
 export const readGame = (gameId: bigint) =>
-  readContract<GameView>("getGame", [gameId]);
+  readContract<GameView>("getGame", [gameId]).then((g) => ({
+    ...g,
+    ticketPrice: weiToPlanck(g.ticketPrice),
+    pot:         weiToPlanck(g.pot),
+  }));
 
 export const readDrawnNumbers = (gameId: bigint) =>
   readContract<readonly number[]>("getDrawnNumbers", [gameId]).then((arr) => Array.from(arr));
@@ -66,4 +72,4 @@ export const readIsRefundClaimed = (gameId: bigint, player: string) =>
   readContract<boolean>("isRefundClaimed", [gameId, toH160(player)]);
 
 export const readWithdrawable = (account: string) =>
-  readContract<bigint>("withdrawable", [toH160(account)]);
+  readContract<bigint>("withdrawable", [toH160(account)]).then(weiToPlanck);

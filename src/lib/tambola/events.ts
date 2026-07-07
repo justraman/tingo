@@ -8,9 +8,10 @@
 
 import { bytesToHex, decodeEventLog, type Abi } from "viem";
 import { getClient } from "@/lib/chain/client";
-import { TAMBOLA_ADDRESS } from "@/lib/chain/constants";
+import { NATIVE_TO_ETH_RATIO, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI } from "./abi";
 
+/** All amounts are converted from the contract's 18-dec wei to native planck. */
 export type TambolaEvent =
   | { name: "GameCreated";       args: { gameId: bigint; host: `0x${string}`; startTime: bigint; ticketPrice: bigint } }
   | { name: "TicketBought";      args: { gameId: bigint; player: `0x${string}`; ticketId: bigint; hash: `0x${string}` } }
@@ -21,6 +22,21 @@ export type TambolaEvent =
   | { name: "RefundClaimed";     args: { gameId: bigint; player: `0x${string}`; amount: bigint } };
 
 export type Unsubscribe = () => void;
+
+const WEI_ARGS: Record<string, string[]> = {
+  GameCreated:   ["ticketPrice"],
+  LineWon:       ["payout"],
+  GameWon:       ["payout", "hostFee"],
+  RefundClaimed: ["amount"],
+};
+
+function weiArgsToPlanck(name: string, args: Record<string, unknown>) {
+  const fields = WEI_ARGS[name];
+  if (!fields) return args;
+  const out = { ...args };
+  for (const f of fields) out[f] = (out[f] as bigint) / NATIVE_TO_ETH_RATIO;
+  return out;
+}
 
 /** Subscribe to all Tambola events on the contract. Returns a teardown fn. */
 export async function subscribeEvents(handler: (e: TambolaEvent) => void): Promise<Unsubscribe> {
@@ -41,8 +57,14 @@ export async function subscribeEvents(handler: (e: TambolaEvent) => void): Promi
         ...args: `0x${string}`[],
       ];
       try {
-        const decoded = decodeEventLog({ abi: TAMBOLA_ABI as Abi, data, topics });
-        handler({ name: decoded.eventName, args: decoded.args } as unknown as TambolaEvent);
+        const decoded = decodeEventLog({ abi: TAMBOLA_ABI as Abi, data, topics }) as unknown as {
+          eventName: string;
+          args: Record<string, unknown>;
+        };
+        handler({
+          name: decoded.eventName,
+          args: weiArgsToPlanck(decoded.eventName, decoded.args),
+        } as unknown as TambolaEvent);
       } catch { /* not one of ours or malformed */ }
     },
   });

@@ -15,6 +15,13 @@ export const CHAIN = {
 export const TAMBOLA_ADDRESS =
   (process.env.NEXT_PUBLIC_TAMBOLA_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
 
+// pallet-revive maps the native balance onto the EVM's 18 decimals: a
+// `Revive.call { value }` is planck, but the contract sees `value × RATIO` as
+// msg.value, and every contract-side amount (ticketPrice, pot, withdrawable,
+// event payouts) is in that 18-decimal "wei". The app works in planck; convert
+// only at the src/lib/tambola read/write/event boundary.
+export const NATIVE_TO_ETH_RATIO = 10n ** BigInt(18 - CHAIN.decimals);
+
 // Must be an account with an existing Revive mapping: the runtime rejects even
 // dry-run calls from unmapped origins (AccountUnmapped). The dev deploy signer
 // is mapped as a side effect of deploying the contract.

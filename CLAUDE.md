@@ -112,6 +112,12 @@ bun run build && playground deploy --signer dev --domain tambola-game --buildDir
 
 - PAPI v2 + this runtime: `H160` args are hex strings (never `Binary`), `Bytes`
   results are `Uint8Array`, and dry-run origins must be revive-mapped accounts.
+- **Planck vs wei.** `Revive.call { value }` is native planck, but the contract sees
+  `value × NATIVE_TO_ETH_RATIO` (10^8) as msg.value, and stores every amount in that
+  18-dec wei. The app works in planck; conversion happens only in
+  `src/lib/tambola/{read,write,events}.ts` (see `NATIVE_TO_ETH_RATIO` in
+  `src/lib/chain/constants.ts`). Passing planck straight into a contract amount arg
+  produces "wrong price"-style reverts.
 - Contract deploys must use `--signer dev` — the CDM package `@tambola/tambola` is
   owned by the dev signer's mapped H160. Each deploy creates a fresh instance; keep
   `.env.local` pointing at the one you mean.

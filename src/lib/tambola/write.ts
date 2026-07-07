@@ -9,7 +9,7 @@ import { bytesToHex, decodeErrorResult, encodeFunctionData, type Abi } from "vie
 import { Binary, type PolkadotSigner } from "polkadot-api";
 import { ss58ToH160 } from "@parity/product-sdk-address";
 import { getClient } from "@/lib/chain/client";
-import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
+import { NATIVE_TO_ETH_RATIO, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI } from "./abi";
 import type { TicketLayout } from "./encode";
 
@@ -158,11 +158,13 @@ export async function callCreateGame(opts: {
   signerAddress: string;
   signer: PolkadotSigner;
   startTimestampSec: bigint;
-  ticketPrice: bigint;
+  ticketPrice: bigint;                    // planck
   onStatus?: (s: TxStatus) => void;
 }) {
+  // The contract stores ticketPrice in 18-dec wei and compares it against
+  // msg.value, which the runtime derives as `Revive.call value × RATIO`.
   const tx = await buildContractCall(opts.signerAddress, "createGame",
-    [opts.startTimestampSec, opts.ticketPrice], 0n);
+    [opts.startTimestampSec, opts.ticketPrice * NATIVE_TO_ETH_RATIO], 0n);
   return watchTransaction(tx, opts.signer, opts.onStatus);
 }
 
@@ -171,7 +173,7 @@ export async function callBuyTicket(opts: {
   signer: PolkadotSigner;
   gameId: bigint;
   layout: TicketLayout;
-  ticketPrice: bigint;
+  ticketPrice: bigint;                    // planck — the runtime scales it into msg.value
   onStatus?: (s: TxStatus) => void;
 }) {
   const tx = await buildContractCall(opts.signerAddress, "buyTicket",

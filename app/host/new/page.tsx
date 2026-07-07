@@ -40,13 +40,13 @@ export default function NewGamePage() {
       if (startTs <= BigInt(Math.floor(Date.now() / 1000))) {
         throw new Error("Start time must be in the future.");
       }
-      const priceWei   = parsePlanck(price, CHAIN.decimals);
-      if (priceWei <= 0n) throw new Error("Ticket price must be greater than zero.");
+      const pricePlanck = parsePlanck(price, CHAIN.decimals);
+      if (pricePlanck <= 0n) throw new Error("Ticket price must be greater than zero.");
       await callCreateGame({
         signerAddress: account.address,
         signer: account.polkadotSigner as any,
         startTimestampSec: startTs,
-        ticketPrice: priceWei,
+        ticketPrice: pricePlanck,
         onStatus: (s) => setStatus(s),
       });
       router.push("/");
