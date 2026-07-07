@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,15 +21,20 @@ import { getClient } from "@/lib/chain/client";
 import {
   readGame, readDrawnNumbers, readTickets, readTicketsByOwner, readIsRefundClaimed, readWithdrawable,
 } from "@/lib/tambola/read";
-import { callBuyTicket, callClaimRefund, callWithdraw } from "@/lib/tambola/write";
+import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
 import { gridFromMasks } from "@/lib/tambola/encode";
-import { CHAIN } from "@/lib/chain/constants";
+import { BLOCK_TIME_SECONDS, BLOCKS_BETWEEN_DRAWS, CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
 
 import type { TicketView } from "@/lib/tambola/abi";
 
 const STATE_LABELS = ["Pending", "Live", "Won", "NoWinner"];
+
+// How long past due a draw may be before we assume the worker is down and
+// offer the player the permissionless drawNumber poke.
+const WORKER_GRACE_SECONDS = 120;
+const WORKER_GRACE_BLOCKS = BigInt(Math.ceil(WORKER_GRACE_SECONDS / BLOCK_TIME_SECONDS));
 
 export function GameView({ id }: { id: string }) {
   const gameId = BigInt(id);
@@ -44,6 +47,7 @@ export function GameView({ id }: { id: string }) {
   const clearDraft = useDraftStore((s) => s.clear);
 
   const snap = useGameStore((s) => s.byId[gameId.toString()]);
+  const bestBlock = useGameStore((s) => s.bestBlock);
   const setBestBlock = useGameStore((s) => s.setBestBlock);
   const setGame = useGameStore((s) => s.setGame);
   const appendDrawn = useGameStore((s) => s.appendDrawn);
@@ -61,6 +65,12 @@ export function GameView({ id }: { id: string }) {
   const [status, setStatus] = useState<string>("");
   const [busy,   setBusy]   = useState<boolean>(false);
   const [error,  setError]  = useState<string>("");
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const refreshTickets = useCallback(async () => {
     try {
@@ -170,6 +180,13 @@ export function GameView({ id }: { id: string }) {
   const ended = game?.state === 2 || game?.state === 3;
   const lineWinner = (line: number) => snap?.lineWinners.find((w) => w.line === line);
 
+  // The worker normally pokes drawNumber, but it is permissionless — when the
+  // worker misses its slot by WORKER_GRACE, let the player poke instead.
+  const startOverdue = game?.state === 0 && game.ticketCount > 0 &&
+    nowSec >= Number(game.startTime) + WORKER_GRACE_SECONDS;
+  const drawOverdue = game?.state === 1 && bestBlock > 0n &&
+    bestBlock >= game.lastDrawBlock + BigInt(BLOCKS_BETWEEN_DRAWS) + WORKER_GRACE_BLOCKS;
+
   async function onBuy() {
     setError(""); setBusy(true);
     try {
@@ -190,6 +207,24 @@ export function GameView({ id }: { id: string }) {
         refreshTickets(),
         readGame(gameId).then((g) => setGame(gameId, { game: g })),
       ]);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDrawNumber() {
+    setError(""); setBusy(true);
+    try {
+      const account = accounts.find((a) => a.address === selected) ?? accounts[0];
+      if (!account) throw new Error("Connect a wallet first");
+      await callDrawNumber({
+        signerAddress: account.address,
+        signer: account.polkadotSigner as any,
+        gameId,
+        onStatus: (s) => setStatus(s),
+      });
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -237,7 +272,8 @@ export function GameView({ id }: { id: string }) {
 
   if (!game) return <div className="text-sm text-muted-foreground">Loading game…</div>;
 
-  const canBuy = game.state === 0 && game.ticketCount < game.maxTickets;
+  const canBuy = game.state === 0 && game.ticketCount < game.maxTickets &&
+    nowSec < Number(game.startTime);
 
   const myHashes = new Set(myTickets.map((t) => t.hash));
   const otherTickets = allTickets.filter((t) => !myHashes.has(t.hash));
@@ -277,6 +313,26 @@ export function GameView({ id }: { id: string }) {
           bottomLine={lineWinner(2)}
           fullhouse={snap?.finalWinner}
         />
+
+        {(startOverdue || drawOverdue) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                {startOverdue ? "The game hasn't started" : "Draws have stalled"}
+              </CardTitle>
+              <CardDescription>
+                The draw worker seems to be down. Drawing is permissionless — anyone
+                can {startOverdue ? "start the game" : "draw the next number"} from here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <WalletStatus />
+              <Button onClick={onDrawNumber} disabled={busy || !isReady || accounts.length === 0}>
+                {startOverdue ? "Start game" : "Draw next number"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader><CardTitle className="text-lg">Number board</CardTitle></CardHeader>

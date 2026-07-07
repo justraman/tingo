@@ -2,7 +2,7 @@
  * bulletin-deploy / playground-cli config.
  *
  * Two executables get bundled:
- *   - app    : the static Next.js export at `./out`
+ *   - app    : the static Vite SPA build at `./out`
  *   - worker : the Vite-built worker script at `./out/worker` (chat + draw poker)
  *
  * `playground deploy --signer dev --env paseo-next-v2` reads this file and

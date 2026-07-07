@@ -7,8 +7,8 @@ this file is the day-to-day rules. Keep it short and true.
 
 On-chain Tambola (Indian Bingo). A Solidity contract on Asset Hub (pallet-revive →
 PolkaVM) is the referee — it owns the pot, validates tickets, draws numbers, and pays
-out. The UI is a static Next.js "product" that runs inside a Polkadot host (Desktop /
-Mobile / Web) and reaches the chain + host services through **TrUAPI** via
+out. The UI is a static Vite + React SPA "product" that runs inside a Polkadot host
+(Desktop / Mobile / Web) and reaches the chain + host services through **TrUAPI** via
 `@parity/product-sdk-host`. A bundled worker drives draws and chat.
 
 ## How to write code here
@@ -68,12 +68,12 @@ it without prose.
 7. **Keep chain constants in one place.** `CHAIN` (`src/lib/chain/constants.ts`) and the
    contract constants must agree — especially block time and `BLOCKS_BETWEEN_DRAWS`.
    Read on-chain constants where you can instead of hardcoding a second copy.
-8. **Static export is non-negotiable.** `output: "export"` → no server code, no
-   `next/image` optimization. Dynamic segments only via `generateStaticParams`:
-   `/game/{id}` is pre-rendered for the first `MAX_PRERENDERED_GAMES` ids
-   (`app/game/[id]/page.tsx`) because IPFS/DotNS gateways can't do SPA rewrites —
-   bump the constant and redeploy when the deployment outgrows it. Don't add anything
-   that needs a Node server.
+8. **Single-document SPA is non-negotiable.** The host and DotNS gateways only ever
+   serve the root document — direct path access is unsupported by design. All routes
+   live in the URL hash (`/#/game/1`) via the minimal router in `src/lib/router.tsx`;
+   never add path-based routing or anything that needs a Node server. Env config is
+   baked in at build time (`define` in both Vite configs) — the product sandbox has
+   no `process` at runtime.
 
 ## Commands
 
@@ -106,8 +106,9 @@ bun run build && playground deploy --signer dev --domain tambola-game --buildDir
   `PATH` for the task at hand.
 - **`resolc 0.6.0` is seeded** at `~/.rvm/0.6.0/` (the 180 MB auto-download is flaky in
   the sandbox). On a fresh machine, recreate the seed or allow the download.
-- **Outputs collide by default.** Foundry writes `forge-out/`; Next writes `out/`. Keep
-  `foundry.toml`'s `out = "forge-out"`.
+- **Outputs collide by default.** Foundry writes `forge-out/`; Vite writes `out/`
+  (app) and `out/worker/`. Keep `foundry.toml`'s `out = "forge-out"`, and keep the
+  app→worker build order (`bun run build`) — the app build empties `out/` first.
 
 ## Open issues to respect (details in ARCHITECTURE.md §9)
 
@@ -127,6 +128,6 @@ bun run build && playground deploy --signer dev --domain tambola-game --buildDir
 ## Definition of done for a change
 
 Contract change → `forge test -vv` green **and** every mirror in rule 1 updated.
-Frontend change → typechecks, `bun run build` produces a clean static export, and the
+Frontend change → typechecks, `bun run build` produces a clean static bundle, and the
 host-vs-standalone branch is handled. Don't commit unless asked; when you do, one
 logical change per commit with a message that says what landed and what was deferred.

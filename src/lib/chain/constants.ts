@@ -15,6 +15,11 @@ export const CHAIN = {
 export const TAMBOLA_ADDRESS =
   (process.env.NEXT_PUBLIC_TAMBOLA_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
 
+export const BLOCK_TIME_SECONDS = 2;
+
+// Mirror of Tambola.BLOCKS_BETWEEN_DRAWS — keep in lockstep with the contract.
+export const BLOCKS_BETWEEN_DRAWS = 5;
+
 // pallet-revive maps the native balance onto the EVM's 18 decimals: a
 // `Revive.call { value }` is planck, but the contract sees `value × RATIO` as
 // msg.value, and every contract-side amount (ticketPrice, pot, withdrawable,

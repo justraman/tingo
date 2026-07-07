@@ -13,8 +13,8 @@ Tambola (Indian Bingo / Housie) rebuilt so the **smart contract is the referee**
 A single Solidity contract on Polkadot Asset Hub (pallet-revive → PolkaVM) owns the
 pot, validates every ticket against the structural rules of a Tambola grid, draws
 numbers with on-chain randomness, awards line and full-house prizes, and pays out —
-no backend, no trusted RNG server, no custodial wallet. The UI is a Next.js static
-export that runs **inside a Polkadot host** (Desktop / Mobile / Web) as a sandboxed
+no backend, no trusted RNG server, no custodial wallet. The UI is a static Vite +
+React SPA that runs **inside a Polkadot host** (Desktop / Mobile / Web) as a sandboxed
 "product" and talks to the chain and to host services (wallet signing, in-game chat,
 the chain connection) through **TrUAPI**, the host's capability API. A worker bundled
 with the app registers a chat room per game and pokes the permissionless `drawNumber`
@@ -139,7 +139,7 @@ uses or could use:
 │     │                                                                                   │
 │  ┌──┴───────────────── Product sandbox (our code) ─────────────────────────────────┐   │
 │  │                                                                                   │   │
-│  │   Next.js static export (app/, src/)            Worker (worker/index.ts)          │   │
+│  │   Vite + React SPA (src/)                       Worker (worker/index.ts)          │   │
 │  │   ─ game list / schedule / live view            ─ chat announcements per game    │   │
 │  │   ─ reads via ReviveApi.call (dry-run)          ─ pokes drawNumber every N blocks│   │
 │  │   ─ writes via Revive.call extrinsic            ─ subscribes best block          │   │
@@ -159,7 +159,7 @@ Two runtime modes, one codebase:
 
 - **Host mode** (the real target): provider from `getHostProvider`, chat available,
   signing via host wallet. Direct HTTP forbidden.
-- **Standalone mode** (`next dev` in a normal tab): provider from `getWsProvider`,
+- **Standalone mode** (`bun run dev` in a normal tab): provider from `getWsProvider`,
   no chat, signer from a browser wallet. Used for local UI iteration only.
 
 The host-vs-standalone split is centralized in `src/lib/chain/client.ts` and
@@ -256,14 +256,16 @@ a `ReentrantSink` guard test.
 
 ---
 
-## 6. The frontend (`app/`, `src/`)
+## 6. The frontend (`src/`)
 
-Next.js 15 App Router, **`output: "export"`** (fully static — required for IPFS / host
-delivery), `trailingSlash`, unoptimized images, React 19, Tailwind + shadcn, dark by
-default. The live game lives at **`/game/{id}`** — a dynamic segment pre-rendered via
-`generateStaticParams` for the first `MAX_PRERENDERED_GAMES` sequential ids (static
-export can't materialize unbounded params and IPFS/DotNS gateways can't do SPA
-rewrites). Legacy `/game?id=N` links redirect client-side.
+Vite + React 19 single-page app, Tailwind + shadcn, dark by default. The host and
+DotNS gateways only ever serve the root document — direct path access is unsupported —
+so routing is **hash-based** (`/#/game/1`) via the ~60-line router in
+`src/lib/router.tsx`; the hash is the one part of the URL that survives a reload
+everywhere. `src/main.tsx` folds any old path-form link (`/game/1/`) into the hash,
+and legacy `/game?id=N` links redirect client-side. `NEXT_PUBLIC_*` env values are
+baked in at build time (`define` in both Vite configs) because the product sandbox
+has no `process` at runtime.
 
 ### 6.1 Chain layer (`src/lib/chain/`)
 
@@ -310,12 +312,14 @@ pallet-revive calls** over PAPI's unsafe API:
   winner, no-winner flag) + global `bestBlock`.
 - `chat` — messages + closed flag per game.
 
-### 6.4 Screens (`app/`)
+### 6.4 Screens (`src/pages/`, routed by `src/App.tsx`)
 
-- `/` (`page.tsx`) — lists games (`readNextGameId` then iterates `readGame`); shows the
-  "open in Polkadot Desktop" card in standalone mode.
-- `/host/new` — schedule form (start datetime + ticket price) → `callCreateGame`.
-- `/game/{id}` — the live view: countdown, ticket generator/buy, number board, winner
+- `#/` (`HomePage.tsx`) — lists games (`readNextGameId` then iterates `readGame`); shows
+  the "open in Polkadot Desktop" card in standalone mode.
+- `#/host/new` (`NewGamePage.tsx`) — schedule form (start datetime + ticket price) →
+  `callCreateGame`.
+- `#/game/{id}` (`GameView.tsx`) — the live view: countdown, ticket generator/buy,
+  number board, winner
   banner, your-ticket grid, refund + withdraw, and the chat panel. Wires three
   subscriptions (best block, contract events scoped to this game, chat) and refreshes
   reads on each event.

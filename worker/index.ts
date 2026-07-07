@@ -24,10 +24,8 @@ import { StatementStoreClient } from "@parity/product-sdk-statement-store";
 import { ss58ToH160 } from "@parity/product-sdk-address";
 import { CHAT_APP_NAME, CHAT_TTL_SECONDS, roomIdForGame, type ChatPayload } from "../src/lib/chat/protocol";
 import { TAMBOLA_ABI } from "../src/lib/tambola/abi";
-import { READ_ONLY_ORIGIN, TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
+import { BLOCKS_BETWEEN_DRAWS, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
 import { ensureSignerConnected, signerManager } from "../src/lib/chain/signer";
-
-const BLOCKS_BETWEEN_DRAWS = 5;   // mirror Tambola.BLOCKS_BETWEEN_DRAWS
 
 interface ActiveGame {
   startTime: bigint;            // unix seconds

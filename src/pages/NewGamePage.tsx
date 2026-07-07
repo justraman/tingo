@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { navigate } from "@/lib/router";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +15,9 @@ function toDatetimeLocalValue(d: Date): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-export default function NewGamePage() {
+export function NewGamePage() {
   const { accounts, isReady } = useAccounts();
   const selected = useWalletStore((s) => s.selectedAddress) ?? accounts[0]?.address;
-  const router = useRouter();
 
   // datetime-local wants wall-clock local time; toISOString() would shift it to UTC.
   const defaultStart = toDatetimeLocalValue(new Date(Date.now() + 5 * 60 * 1000));
@@ -49,7 +46,7 @@ export default function NewGamePage() {
         ticketPrice: pricePlanck,
         onStatus: (s) => setStatus(s),
       });
-      router.push("/");
+      navigate("/");
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {

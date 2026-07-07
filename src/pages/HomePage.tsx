@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/lib/router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +16,7 @@ const STATE_VARIANTS: Record<number, "default" | "secondary" | "success" | "outl
   0: "secondary", 1: "default", 2: "success", 3: "outline",
 };
 
-export default function HomePage() {
+export function HomePage() {
   const [games, setGames] = useState<Listing[]>([]);
   const [inHost, setInHost] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +96,7 @@ export default function HomePage() {
               <div className="text-xs text-muted-foreground">Drawn: {game.drawnCount.toString()} / 90</div>
             </CardContent>
             <CardFooter>
-              <Link className="w-full" href={`/game/${id}/`}><Button variant="outline" className="w-full">Open</Button></Link>
+              <Link className="w-full" href={`/game/${id}`}><Button variant="outline" className="w-full">Open</Button></Link>
             </CardFooter>
           </Card>
         ))}

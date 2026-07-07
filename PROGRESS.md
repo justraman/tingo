@@ -2,7 +2,7 @@
 
 On-chain Indian Bingo (Tambola) where a pallet-revive smart contract is the source of
 truth: it holds the pot, validates tickets, draws numbers, awards line + full-house
-prizes, and pays out. The frontend is a Next.js + shadcn product that runs inside a
+prizes, and pays out. The frontend is a Vite + React SPA + shadcn product that runs inside a
 Polkadot **Triangle host** and reaches the chain + host services (wallet, chat) through
 **TrUAPI** (`@parity/product-sdk-host`); a bundled worker drives draws and chat.
 
@@ -12,7 +12,7 @@ Polkadot **Triangle host** and reaches the chain + host services (wallet, chat) 
 - **Network:** `paseo-next-v2` (Polkadot Playground testnet) Asset Hub
 - **Contract language:** Solidity → PolkaVM via `resolc` (Revive)
 - **Host protocol:** [`paritytech/truapi`](https://github.com/paritytech/truapi) — the constrained host ↔ product API
-- **Reference port:** [`justraman/tambola`](https://github.com/justraman/tambola) (Vue 2 + Firebase) → contract + Next.js
+- **Reference port:** [`justraman/tambola`](https://github.com/justraman/tambola) (Vue 2 + Firebase) → contract + React SPA
 - **SDK reference:** [`paritytech/host-playground`](https://github.com/paritytech/host-playground)
 - **Deploy tool:** [`paritytech/playground-cli`](https://github.com/paritytech/playground-cli)
 
@@ -41,11 +41,11 @@ Create validation, every `buyTicket` rule + dedup, draw gating, single + multi-l
 payout, full-house payout for each unclaimed-line combo (sum = 100%), withdraw, refund
 pre-conditions, and a `ReentrantSink` reentrancy guard test.
 
-### Frontend (`app/`, `src/`) — Next.js 15 + shadcn, static export
-- Pages: `/` (game list), `/host/new` (schedule), `/game/{id}` (live view — countdown,
+### Frontend (`src/`) — Vite + React SPA + shadcn (migrated from Next.js 2026-07-07;
+hosts only serve the root document, so routes are hash-based)
+- Pages: `#/` (game list), `#/host/new` (schedule), `#/game/{id}` (live view — countdown,
   ticket generator/regenerator, buy, number board, winners, refund + withdraw, chat).
-  `[id]` is pre-rendered via `generateStaticParams` for the first `MAX_PRERENDERED_GAMES`
-  ids; legacy `/game?id=N` redirects client-side.
+  Old path-form and legacy `/game?id=N` links redirect client-side into the hash route.
 - Components: `TicketGrid`, `NumberBoard`, `Countdown`, `TicketGenerator`, `ChatPanel`,
   `WinnerBanner` + shadcn `ui/*`.
 - Chain libs (`src/lib/chain/*`): host detection, PAPI client singleton (host provider

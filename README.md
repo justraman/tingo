@@ -7,8 +7,9 @@ backend, no trusted RNG server, no custodial wallet.
 - **Contract** (`contracts/Tambola.sol`) — Solidity on **pallet-revive / PolkaVM**
   (Asset Hub, `paseo-next-v2`). Holds many concurrent games; pays
   15 / 15 / 15 / 50 / 5 to top-line / middle-line / bottom-line / full-house / host.
-- **Frontend** (`app/`, `src/`) — Next.js 15 static export + shadcn, runs **inside a
-  Polkadot host** (Desktop / Mobile / Web) as a sandboxed product.
+- **Frontend** (`src/`) — Vite + React SPA + shadcn, runs **inside a Polkadot host**
+  (Desktop / Mobile / Web) as a sandboxed product. Hosts only serve the root
+  document, so routes live in the URL hash (`/#/game/1`).
 - **Worker** (`worker/index.ts`) — runs in the host's worker sandbox: registers a chat
   room per game and pokes the permissionless `drawNumber` forward.
 
@@ -30,8 +31,8 @@ User-Agent Programming Interface*, <https://paritytech.github.io/truapi/>), the 
 | Host detection    | `isInsideContainer()`                        |
 
 The sandbox forbids direct HTTP, so **reads** go through `ReviveApi.call` dry-runs and
-all chain traffic is WebSocket PAPI. Outside a host (`next dev`) the app degrades to a
-standalone WS connection for UI iteration.
+all chain traffic is WebSocket PAPI. Outside a host (`bun run dev`) the app degrades to
+a standalone WS connection for UI iteration.
 
 ## Prize split
 
@@ -53,8 +54,8 @@ pull-payment ledger — call `withdraw()` to receive funds.
 ```
 contracts/   Tambola.sol + ITambola.sol         (the referee)
 test/        Tambola.t.sol                       (Foundry, 19 cases)
-app/         Next.js routes: / · /host/new · /game/{id}
-src/lib/     chain/ (client·signer·constants) · tambola/ (read·write·events·ticket·encode·abi)
+src/pages/   hash routes: #/ · #/host/new · #/game/{id}
+src/lib/     router · chain/ (client·signer·constants) · tambola/ (read·write·events·ticket·encode·abi)
              host/ (detect) · chat/ (manager) · store/ (zustand)
 src/components/  TicketGrid · NumberBoard · Countdown · TicketGenerator · ChatPanel · WinnerBanner
 worker/      index.ts (chat + draw poker) + vite.config.ts
