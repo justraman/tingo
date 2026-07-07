@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface Props {
   startTime: bigint;
+  className?: string;
 }
 
-export function Countdown({ startTime }: Props) {
+export function Countdown({ startTime, className }: Props) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -12,13 +14,17 @@ export function Countdown({ startTime }: Props) {
   }, []);
 
   const secsToGo = Number(startTime) - Math.floor(now / 1000);
-  if (secsToGo <= 0) return <span className="text-emerald-500 font-semibold">live</span>;
+  if (secsToGo <= 0) {
+    return <span className={cn("font-semibold text-emerald-400", className)}>live</span>;
+  }
 
-  const minutes = Math.floor(secsToGo / 60);
+  const hours   = Math.floor(secsToGo / 3600);
+  const minutes = Math.floor((secsToGo % 3600) / 60);
   const seconds = secsToGo % 60;
 
   return (
-    <span className="font-mono text-sm tabular-nums">
+    <span className={cn("font-game font-semibold tabular-nums", className)}>
+      {hours > 0 && `${String(hours).padStart(2, "0")}:`}
       {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
     </span>
   );

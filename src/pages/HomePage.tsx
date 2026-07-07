@@ -1,25 +1,74 @@
 import { useEffect, useState } from "react";
 import { Link } from "@/lib/router";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { isHostAsync } from "@/lib/host/detect";
 import { readNextGameId, readGame } from "@/lib/tambola/read";
 import { CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, shortenAddress } from "@/lib/utils";
+import { ArrowRight, Ticket, Trophy } from "lucide-react";
 import type { GameView } from "@/lib/tambola/abi";
 
 interface Listing { id: bigint; game: GameView; }
 
-const STATE_LABELS = ["Pending", "Live", "Won", "NoWinner"];
-const STATE_VARIANTS: Record<number, "default" | "secondary" | "success" | "outline"> = {
-  0: "secondary", 1: "default", 2: "success", 3: "outline",
+const STATE_LABELS = ["Starts soon", "Live", "Won", "No winner"];
+const STATE_VARIANTS: Record<number, "default" | "secondary" | "success" | "outline" | "live"> = {
+  0: "secondary", 1: "live", 2: "success", 3: "outline",
 };
+
+function GameCard({ id, game, index }: Listing & { index: number }) {
+  const sold = game.maxTickets > 0 ? game.ticketCount / game.maxTickets : 0;
+  return (
+    <Link href={`/game/${id}`} className="block">
+      <div
+        className="glass glass-interactive animate-rise flex h-full cursor-pointer flex-col rounded-3xl p-6"
+        style={{ animationDelay: `${Math.min(index * 60, 400)}ms` }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="font-game text-lg font-bold tracking-tight">Game #{id.toString()}</span>
+          <Badge variant={STATE_VARIANTS[game.state] ?? "outline"}>{STATE_LABELS[game.state]}</Badge>
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">Host {shortenAddress(game.host)}</div>
+
+        <div className="mt-5 flex items-end justify-between">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Pot</div>
+            <div className="font-game text-2xl font-bold tabular-nums">
+              {formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol)}
+            </div>
+          </div>
+          <div className="text-right text-xs text-muted-foreground">
+            <div>{formatPlanck(game.ticketPrice, CHAIN.decimals, CHAIN.symbol)} / ticket</div>
+            <div className="mt-0.5">{game.drawnCount.toString()} / 90 drawn</div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="mb-1.5 flex justify-between text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1"><Ticket className="h-3 w-3" /> {game.ticketCount} / {game.maxTickets}</span>
+            <span>{Math.round(sold * 100)}% sold</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-white/60 to-white/90 transition-[width] duration-700"
+              style={{ width: `${Math.max(sold * 100, 2)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-1 text-sm font-medium text-foreground/70">
+          Open <ArrowRight className="h-4 w-4" />
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export function HomePage() {
   const [games, setGames] = useState<Listing[]>([]);
   const [inHost, setInHost] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     void isHostAsync().then(setInHost);
@@ -38,6 +87,8 @@ export function HomePage() {
           }
         }
         if (!cancel) setGames(out.reverse());
+      } catch (e: any) {
+        if (!cancel) setError(e?.message ?? String(e));
       } finally {
         if (!cancel) setLoading(false);
       }
@@ -47,58 +98,51 @@ export function HomePage() {
 
   if (inHost === false) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Open this app in Polkadot Desktop</CardTitle>
-          <CardDescription>
-            Tambola is a Polkadot Triangle product. Open it inside the Polkadot Desktop or Web host so the
-            in-game chat and wallet signer can hook in.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="glass animate-rise mx-auto max-w-lg rounded-3xl p-8 text-center">
+        <h2 className="text-xl font-semibold leading-tight">Open this app in Polkadot Desktop</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Tambola is a Polkadot Triangle product. Open it inside the Polkadot Desktop or Web host so the
+          in-game chat and wallet signer can hook in.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-end justify-between gap-4">
+    <div className="flex flex-col gap-8">
+      <div className="animate-rise flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Games</h1>
-          <p className="text-sm text-muted-foreground">paseo-next-v2 Asset Hub · {CHAIN.symbol}</p>
+          <h1 className="text-3xl font-bold tracking-tight">Games</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            On-chain Tambola · {CHAIN.symbol} on Asset Hub
+          </p>
         </div>
-        <Link href="/host/new"><Button>Schedule a game</Button></Link>
+        <Link href="/host/new"><Button size="lg">Schedule a game</Button></Link>
       </div>
 
-      {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
-
-      {!loading && games.length === 0 && (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No games yet. Be the first to host one.
-          </CardContent>
-        </Card>
+      {loading && (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className="skeleton h-56 rounded-3xl" />)}
+        </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {games.map(({ id, game }) => (
-          <Card key={id.toString()}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Game #{id.toString()}</CardTitle>
-                <Badge variant={STATE_VARIANTS[game.state] ?? "outline"}>{STATE_LABELS[game.state]}</Badge>
-              </div>
-              <CardDescription>Host {shortenAddress(game.host)}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <div>Ticket: <span className="font-medium">{formatPlanck(game.ticketPrice, CHAIN.decimals, CHAIN.symbol)}</span></div>
-              <div>Tickets: {game.ticketCount} / {game.maxTickets}</div>
-              <div>Pot: <span className="font-medium">{formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol)}</span></div>
-              <div className="text-xs text-muted-foreground">Drawn: {game.drawnCount.toString()} / 90</div>
-            </CardContent>
-            <CardFooter>
-              <Link className="w-full" href={`/game/${id}`}><Button variant="outline" className="w-full">Open</Button></Link>
-            </CardFooter>
-          </Card>
+      {!loading && error && (
+        <div className="glass animate-rise rounded-3xl p-6 text-center text-sm text-red-400">
+          Couldn't reach the chain: {error}
+        </div>
+      )}
+
+      {!loading && !error && games.length === 0 && (
+        <div className="glass animate-rise flex flex-col items-center gap-3 rounded-3xl py-16 text-center">
+          <Trophy className="h-8 w-8 text-muted-foreground/50" />
+          <div className="text-sm text-muted-foreground">No games yet. Be the first to host one.</div>
+          <Link href="/host/new"><Button variant="secondary" className="mt-2">Host a game</Button></Link>
+        </div>
+      )}
+
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {games.map(({ id, game }, i) => (
+          <GameCard key={id.toString()} id={id} game={game} index={i} />
         ))}
       </div>
     </div>

@@ -69,11 +69,11 @@ it without prose.
    contract constants must agree — especially block time and `BLOCKS_BETWEEN_DRAWS`.
    Read on-chain constants where you can instead of hardcoding a second copy.
 8. **Single-document SPA is non-negotiable.** The host and DotNS gateways only ever
-   serve the root document — direct path access is unsupported by design. All routes
-   live in the URL hash (`/#/game/1`) via the minimal router in `src/lib/router.tsx`;
-   never add path-based routing or anything that needs a Node server. Env config is
-   baked in at build time (`define` in both Vite configs) — the product sandbox has
-   no `process` at runtime.
+   serve the root document — direct page access is unsupported by design. The URL
+   stays at `/`; the current route lives in app state (`src/lib/router.tsx`, seeded
+   once from any old-style deep link). Never add path-based routing or anything that
+   needs a Node server. Env config is baked in at build time (`define` in both Vite
+   configs) — the product sandbox has no `process` at runtime.
 
 ## Commands
 

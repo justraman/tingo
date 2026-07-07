@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -26,10 +26,15 @@ import { subscribeEvents } from "@/lib/tambola/events";
 import { gridFromMasks } from "@/lib/tambola/encode";
 import { BLOCK_TIME_SECONDS, BLOCKS_BETWEEN_DRAWS, CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
+import { hueFromSeed } from "@/lib/ticket-hues";
+import { Coins, Zap } from "lucide-react";
 
 import type { TicketView } from "@/lib/tambola/abi";
 
-const STATE_LABELS = ["Pending", "Live", "Won", "NoWinner"];
+const STATE_LABELS = ["Starts soon", "Live", "Won", "No winner"];
+const STATE_VARIANTS: Record<number, "secondary" | "live" | "success" | "outline"> = {
+  0: "secondary", 1: "live", 2: "success", 3: "outline",
+};
 
 // How long past due a draw may be before we assume the worker is down and
 // offer the player the permissionless drawNumber poke.
@@ -270,7 +275,17 @@ export function GameView({ id }: { id: string }) {
     }
   }
 
-  if (!game) return <div className="text-sm text-muted-foreground">Loading game…</div>;
+  if (!game) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="flex flex-col gap-5">
+          <div className="skeleton h-36 rounded-3xl" />
+          <div className="skeleton h-96 rounded-3xl" />
+        </div>
+        <div className="skeleton h-96 rounded-3xl" />
+      </div>
+    );
+  }
 
   const canBuy = game.state === 0 && game.ticketCount < game.maxTickets &&
     nowSec < Number(game.startTime);
@@ -289,23 +304,41 @@ export function GameView({ id }: { id: string }) {
     return undefined;
   };
 
+  const stats = [
+    { label: "Pot", value: formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol), big: true },
+    { label: "Tickets", value: `${game.ticketCount} / ${game.maxTickets}` },
+    { label: "Ticket price", value: formatPlanck(game.ticketPrice, CHAIN.decimals, CHAIN.symbol) },
+    { label: "Drawn", value: `${game.drawnCount.toString()} / 90` },
+  ];
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      <div className="flex flex-col gap-4">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Game #{gameId.toString()}</CardTitle>
-              <Badge>{STATE_LABELS[game.state]}</Badge>
+      <div className="flex flex-col gap-5">
+        <div className="glass animate-rise rounded-3xl p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <h1 className="font-game text-2xl font-bold tracking-tight">Game #{gameId.toString()}</h1>
+              <Badge variant={STATE_VARIANTS[game.state] ?? "outline"}>{STATE_LABELS[game.state]}</Badge>
             </div>
-            <CardDescription>
-              Hosted by {shortenAddress(game.host)} ·
-              {" "}{game.ticketCount}/{game.maxTickets} tickets ·
-              {" "}pot {formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol)} ·
-              {" "}starts in <Countdown startTime={game.startTime} />
-            </CardDescription>
-          </CardHeader>
-        </Card>
+            {game.state === 0 && (
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 backdrop-blur-xl">
+                <span className="text-xs text-muted-foreground">Starts in</span>
+                <Countdown startTime={game.startTime} className="text-sm" />
+              </div>
+            )}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">Hosted by {shortenAddress(game.host)}</div>
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {stats.map((s) => (
+              <div key={s.label} className="glass-inset rounded-2xl px-4 py-3">
+                <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{s.label}</div>
+                <div className={cn("font-game mt-0.5 font-bold tabular-nums", s.big ? "text-xl text-amber-300" : "text-base")}>
+                  {s.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <WinnerBanner
           topLine={lineWinner(0)}
@@ -315,26 +348,25 @@ export function GameView({ id }: { id: string }) {
         />
 
         {(startOverdue || drawOverdue) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {startOverdue ? "The game hasn't started" : "Draws have stalled"}
-              </CardTitle>
-              <CardDescription>
-                The draw worker seems to be down. Drawing is permissionless — anyone
-                can {startOverdue ? "start the game" : "draw the next number"} from here.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <WalletStatus />
+          <div className="animate-rise rounded-3xl border border-amber-300/25 bg-[linear-gradient(135deg,hsl(38_90%_55%/0.12),hsl(38_90%_55%/0.03))] p-6 backdrop-blur-2xl">
+            <div className="flex items-center gap-2 text-lg font-semibold leading-tight">
+              <Zap className="h-5 w-5 text-amber-300" />
+              {startOverdue ? "The game hasn't started" : "Draws have stalled"}
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              The draw worker seems to be down. Drawing is permissionless — anyone
+              can {startOverdue ? "start the game" : "draw the next number"} from here.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <Button onClick={onDrawNumber} disabled={busy || !isReady || accounts.length === 0}>
                 {startOverdue ? "Start game" : "Draw next number"}
               </Button>
-            </CardContent>
-          </Card>
+              <WalletStatus />
+            </div>
+          </div>
         )}
 
-        <Card>
+        <Card className="animate-rise" style={{ animationDelay: "80ms" }}>
           <CardHeader><CardTitle className="text-lg">Number board</CardTitle></CardHeader>
           <CardContent>
             <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
@@ -342,13 +374,18 @@ export function GameView({ id }: { id: string }) {
         </Card>
 
         {accounts.length > 1 && (
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-muted-foreground">Account:</span>
             {accounts.map((a) => (
               <button
                 key={a.address}
                 onClick={() => setSelected(a.address)}
-                className={`rounded border px-2 py-1 font-mono ${a.address === selected ? "border-primary" : "border-border"}`}
+                className={cn(
+                  "cursor-pointer rounded-full border px-3 py-1 font-mono backdrop-blur-xl transition-colors",
+                  a.address === selected
+                    ? "border-white/40 bg-white/[0.14] text-foreground"
+                    : "border-white/10 bg-white/[0.04] text-muted-foreground hover:bg-white/[0.09] hover:text-foreground",
+                )}
               >
                 {a.name ?? shortenAddress(a.address)}
               </button>
@@ -357,70 +394,66 @@ export function GameView({ id }: { id: string }) {
         )}
 
         {canBuy && (
-          <>
-            <WalletStatus />
-            <TicketGenerator
-              gameId={gameId}
-              ticketPrice={game.ticketPrice}
-              tokenSymbol={CHAIN.symbol}
-              decimals={CHAIN.decimals}
-              disabled={busy || !isReady}
-              onBuy={onBuy}
-              boughtCount={myTickets.length}
-            />
-          </>
+          <TicketGenerator
+            gameId={gameId}
+            ticketPrice={game.ticketPrice}
+            tokenSymbol={CHAIN.symbol}
+            decimals={CHAIN.decimals}
+            disabled={busy || !isReady}
+            onBuy={onBuy}
+            boughtCount={myTickets.length}
+          />
         )}
+        {canBuy && <WalletStatus />}
 
         {(myTickets.length > 0 || otherTickets.length > 0) && (
-          <Card>
+          <Card className="animate-rise" style={{ animationDelay: "140ms" }}>
             <CardHeader>
-              <div className="flex gap-1 rounded-md bg-muted/50 p-1 w-fit">
-                <button
-                  onClick={() => setTab("mine")}
-                  className={cn(
-                    "rounded-sm px-3 py-1 text-sm font-medium transition-colors",
-                    tab === "mine" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  My tickets ({myTickets.length})
-                </button>
-                <button
-                  onClick={() => setTab("others")}
-                  className={cn(
-                    "rounded-sm px-3 py-1 text-sm font-medium transition-colors",
-                    tab === "others" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Other tickets ({otherTickets.length})
-                </button>
+              <div className="glass-inset flex w-fit gap-1 rounded-full p-1">
+                {([["mine", `My tickets (${myTickets.length})`], ["others", `Other tickets (${otherTickets.length})`]] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setTab(key)}
+                    className={cn(
+                      "cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-all",
+                      tab === key
+                        ? "bg-white/[0.14] text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.15)]"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-4">
+            <CardContent className="flex flex-wrap gap-5">
               {tab === "mine" && myTickets.length === 0 && (
                 <div className="text-sm text-muted-foreground">You have no tickets in this game yet.</div>
               )}
               {tab === "mine" && myTickets.map((t) => (
-                <div key={t.hash} className="space-y-1">
+                <div key={t.hash} className="animate-rise space-y-1.5">
                   <TicketGrid
                     grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
                     polledNumbers={drawn}
                     highlightRow={winRowFor(t)}
+                    hue={hueFromSeed(t.hash)}
                   />
-                  <div className="text-xs text-muted-foreground font-mono">hash {shortenAddress(t.hash)}</div>
+                  <div className="font-mono text-xs text-muted-foreground">hash {shortenAddress(t.hash)}</div>
                 </div>
               ))}
               {tab === "others" && otherTickets.length === 0 && (
                 <div className="text-sm text-muted-foreground">No other tickets yet.</div>
               )}
               {tab === "others" && otherTickets.map((t) => (
-                <div key={t.hash} className="space-y-1">
+                <div key={t.hash} className="animate-rise space-y-1.5">
                   <TicketGrid
                     grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
                     polledNumbers={drawn}
                     highlightRow={winRowFor(t)}
                     size="sm"
+                    hue={hueFromSeed(t.hash)}
                   />
-                  <div className="text-xs text-muted-foreground font-mono">{shortenAddress(t.owner)}</div>
+                  <div className="font-mono text-xs text-muted-foreground">{shortenAddress(t.owner)}</div>
                 </div>
               ))}
             </CardContent>
@@ -428,10 +461,12 @@ export function GameView({ id }: { id: string }) {
         )}
 
         {snap?.noWinner && myTickets.length > 0 && !refundClaimed && (
-          <Card>
+          <Card className="animate-rise">
             <CardHeader>
               <CardTitle className="text-lg">Game ended without a full house</CardTitle>
-              <CardDescription>Claim the refund share for your {myTickets.length} ticket{myTickets.length > 1 ? "s" : ""} (settles to your withdrawable balance).</CardDescription>
+              <div className="text-sm text-muted-foreground">
+                Claim the refund share for your {myTickets.length} ticket{myTickets.length > 1 ? "s" : ""} (settles to your withdrawable balance).
+              </div>
             </CardHeader>
             <CardContent>
               <Button onClick={onRefund} disabled={busy}>Claim refund</Button>
@@ -440,26 +475,25 @@ export function GameView({ id }: { id: string }) {
         )}
 
         {withdrawable > 0n && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">You have winnings to withdraw</CardTitle>
-              <CardDescription>
-                Pull-payment ledger holds {formatPlanck(withdrawable, CHAIN.decimals, CHAIN.symbol)}.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={onWithdraw} disabled={busy}>
-                Withdraw {formatPlanck(withdrawable, CHAIN.decimals, CHAIN.symbol)}
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="animate-rise rounded-3xl border border-emerald-400/25 bg-[linear-gradient(135deg,hsl(158_74%_46%/0.14),hsl(158_74%_46%/0.04))] p-6 backdrop-blur-2xl shadow-[0_8px_32px_hsl(158_74%_46%/0.1)]">
+            <div className="flex items-center gap-2 text-lg font-semibold leading-tight">
+              <Coins className="h-5 w-5 text-emerald-300" />
+              You have winnings to withdraw
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Your balance holds {formatPlanck(withdrawable, CHAIN.decimals, CHAIN.symbol)}.
+            </p>
+            <Button onClick={onWithdraw} disabled={busy} className="mt-4">
+              Withdraw {formatPlanck(withdrawable, CHAIN.decimals, CHAIN.symbol)}
+            </Button>
+          </div>
         )}
 
         {status && <div className="text-xs text-muted-foreground">tx: {status}</div>}
-        {error  && <div className="text-sm text-destructive">{error}</div>}
+        {error  && <div className="text-sm text-red-400">{error}</div>}
       </div>
 
-      <div className="lg:sticky lg:top-4 self-start">
+      <div className="self-start lg:sticky lg:top-24">
         <ChatPanel gameId={gameId} disabled={ended} />
       </div>
     </div>

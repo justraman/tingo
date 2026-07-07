@@ -9,6 +9,7 @@ import { bytesToHex, decodeErrorResult, encodeFunctionData, type Abi } from "vie
 import { Binary, type PolkadotSigner } from "polkadot-api";
 import { ss58ToH160 } from "@parity/product-sdk-address";
 import { getClient } from "@/lib/chain/client";
+import { ensureChainSubmitPermission } from "@/lib/chain/signer";
 import { NATIVE_TO_ETH_RATIO, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI } from "./abi";
 import type { TicketLayout } from "./encode";
@@ -23,6 +24,7 @@ async function buildContractCall(
   args: readonly unknown[],
   value: bigint,
 ) {
+  await ensureChainSubmitPermission();
   const client = await getClient();
   const unsafe = (client as unknown as { getUnsafeApi: () => any }).getUnsafeApi();
 

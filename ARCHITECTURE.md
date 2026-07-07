@@ -259,13 +259,12 @@ a `ReentrantSink` guard test.
 ## 6. The frontend (`src/`)
 
 Vite + React 19 single-page app, Tailwind + shadcn, dark by default. The host and
-DotNS gateways only ever serve the root document — direct path access is unsupported —
-so routing is **hash-based** (`/#/game/1`) via the ~60-line router in
-`src/lib/router.tsx`; the hash is the one part of the URL that survives a reload
-everywhere. `src/main.tsx` folds any old path-form link (`/game/1/`) into the hash,
-and legacy `/game?id=N` links redirect client-side. `NEXT_PUBLIC_*` env values are
-baked in at build time (`define` in both Vite configs) because the product sandbox
-has no `process` at runtime.
+DotNS gateways only ever serve the root document — direct page access is unsupported —
+so the URL stays at `/` and the current route lives in app state (the in-memory
+router in `src/lib/router.tsx`). The initial route is seeded once from any old-style
+deep link (hash, path, or `/game?id=N`); after that the URL is never touched.
+`NEXT_PUBLIC_*` env values are baked in at build time (`define` in both Vite
+configs) because the product sandbox has no `process` at runtime.
 
 ### 6.1 Chain layer (`src/lib/chain/`)
 
@@ -314,11 +313,11 @@ pallet-revive calls** over PAPI's unsafe API:
 
 ### 6.4 Screens (`src/pages/`, routed by `src/App.tsx`)
 
-- `#/` (`HomePage.tsx`) — lists games (`readNextGameId` then iterates `readGame`); shows
+- `/` (`HomePage.tsx`) — lists games (`readNextGameId` then iterates `readGame`); shows
   the "open in Polkadot Desktop" card in standalone mode.
-- `#/host/new` (`NewGamePage.tsx`) — schedule form (start datetime + ticket price) →
+- `/host/new` (`NewGamePage.tsx`) — schedule form (start datetime + ticket price) →
   `callCreateGame`.
-- `#/game/{id}` (`GameView.tsx`) — the live view: countdown, ticket generator/buy,
+- `/game/{id}` (`GameView.tsx`) — the live view: countdown, ticket generator/buy,
   number board, winner
   banner, your-ticket grid, refund + withdraw, and the chat panel. Wires three
   subscriptions (best block, contract events scoped to this game, chat) and refreshes

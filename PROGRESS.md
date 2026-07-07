@@ -42,10 +42,10 @@ payout, full-house payout for each unclaimed-line combo (sum = 100%), withdraw, 
 pre-conditions, and a `ReentrantSink` reentrancy guard test.
 
 ### Frontend (`src/`) — Vite + React SPA + shadcn (migrated from Next.js 2026-07-07;
-hosts only serve the root document, so routes are hash-based)
-- Pages: `#/` (game list), `#/host/new` (schedule), `#/game/{id}` (live view — countdown,
+hosts only serve the root document, so routing is internal app state and the URL stays `/`)
+- Pages: home (game list), host/new (schedule), game/{id} (live view — countdown,
   ticket generator/regenerator, buy, number board, winners, refund + withdraw, chat).
-  Old path-form and legacy `/game?id=N` links redirect client-side into the hash route.
+  Old hash/path/`?id=N` links still seed the initial route client-side.
 - Components: `TicketGrid`, `NumberBoard`, `Countdown`, `TicketGenerator`, `ChatPanel`,
   `WinnerBanner` + shadcn `ui/*`.
 - Chain libs (`src/lib/chain/*`): host detection, PAPI client singleton (host provider

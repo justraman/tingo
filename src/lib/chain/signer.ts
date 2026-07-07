@@ -9,6 +9,8 @@
  */
 
 import { HostProvider, SignerManager } from "@parity/product-sdk-signer";
+import { requestPermission } from "@parity/product-sdk-host";
+import { isHostAsync } from "@/lib/host/detect";
 
 const DEPLOYED_DOTNS = "tambola-game.dot";
 
@@ -32,6 +34,24 @@ export const signerManager = new SignerManager({
       productAccount: { dotNsIdentifier: selfDotNsIdentifier(), requestName: false },
     }),
 });
+
+/**
+ * The host gates signing on the `ChainSubmit` permission; when it's missing a
+ * sign request hangs silently instead of erroring. Re-request it in the click
+ * context right before each transaction — an already-granted permission
+ * resolves instantly, an ungranted one makes the host show its approval
+ * prompt, and a denial becomes a visible error instead of a hang.
+ */
+export async function ensureChainSubmitPermission(): Promise<void> {
+  if (!(await isHostAsync())) return; // standalone signing has no host gate
+  const result = await requestPermission({ tag: "ChainSubmit", value: undefined });
+  if (!result.ok) {
+    throw new Error(`Could not request transaction permission from the host: ${result.error.message}`);
+  }
+  if (!result.value) {
+    throw new Error("The host denied permission to submit transactions.");
+  }
+}
 
 let connectPromise: Promise<unknown> | null = null;
 

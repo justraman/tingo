@@ -32,20 +32,26 @@ export function TicketGenerator({ gameId, ticketPrice, tokenSymbol, decimals, di
   }, [draft, gameId, regenerate]);
 
   return (
-    <Card>
+    <Card className="animate-rise">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-lg">{boughtCount > 0 ? "Buy another ticket" : "Your ticket"}</CardTitle>
         <Button variant="ghost" size="sm" onClick={() => regenerate(gameId)} disabled={disabled}>
-          <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
+          <RefreshCw className="h-4 w-4" /> Shuffle
         </Button>
       </CardHeader>
       <CardContent>
-        {draft ? <TicketGrid grid={draft.grid} /> : <div className="text-sm text-muted-foreground">Generating…</div>}
+        {draft ? (
+          <div key={draft.grid.flat().join(",")} className="animate-pop inline-block">
+            <TicketGrid grid={draft.grid} />
+          </div>
+        ) : (
+          <div className="skeleton h-[10.5rem] w-full max-w-md" />
+        )}
       </CardContent>
       <CardFooter>
-        <Button onClick={onBuy} disabled={!draft || disabled} className="w-full">
-          <Sparkles className="mr-2 h-4 w-4" />
-          Buy ticket for {format(ticketPrice, decimals)} {tokenSymbol}
+        <Button onClick={onBuy} disabled={!draft || disabled} size="lg" className="w-full">
+          <Sparkles className="h-5 w-5" />
+          Buy ticket · {format(ticketPrice, decimals)} {tokenSymbol}
         </Button>
       </CardFooter>
     </Card>

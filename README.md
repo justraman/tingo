@@ -9,7 +9,7 @@ backend, no trusted RNG server, no custodial wallet.
   15 / 15 / 15 / 50 / 5 to top-line / middle-line / bottom-line / full-house / host.
 - **Frontend** (`src/`) — Vite + React SPA + shadcn, runs **inside a Polkadot host**
   (Desktop / Mobile / Web) as a sandboxed product. Hosts only serve the root
-  document, so routes live in the URL hash (`/#/game/1`).
+  document, so the URL stays at `/` and routing is internal app state.
 - **Worker** (`worker/index.ts`) — runs in the host's worker sandbox: registers a chat
   room per game and pokes the permissionless `drawNumber` forward.
 
@@ -54,7 +54,7 @@ pull-payment ledger — call `withdraw()` to receive funds.
 ```
 contracts/   Tambola.sol + ITambola.sol         (the referee)
 test/        Tambola.t.sol                       (Foundry, 19 cases)
-src/pages/   hash routes: #/ · #/host/new · #/game/{id}
+src/pages/   screens: home · host/new · game/{id}   (in-memory routing, URL stays /)
 src/lib/     router · chain/ (client·signer·constants) · tambola/ (read·write·events·ticket·encode·abi)
              host/ (detect) · chat/ (manager) · store/ (zustand)
 src/components/  TicketGrid · NumberBoard · Countdown · TicketGenerator · ChatPanel · WinnerBanner
