@@ -28,8 +28,8 @@ interface ITambola {
         uint256 ticketPrice;
         uint64  startTime;
         uint64  lastDrawBlock;
-        uint8   maxPlayers;
-        uint8   playerCount;
+        uint8   maxTickets;
+        uint8   ticketCount;
         uint128 polledMask;
         uint256 pot;
         GameState state;
@@ -64,7 +64,8 @@ interface ITambola {
 
     /// Buy a ticket. `layout` is the row-major 3x9 grid; `layout[row*9 + col]`
     /// is the number at that cell, or 0 for an empty cell. Must send exactly
-    /// `ticketPrice` as msg.value.
+    /// `ticketPrice` as msg.value. A player may buy any number of tickets while
+    /// capacity lasts; each layout must be unique within the game.
     function buyTicket(uint256 gameId, uint8[27] calldata layout) external payable;
 
     /// Draw the next number. Permissionless: anyone can call once
@@ -72,8 +73,9 @@ interface ITambola {
     /// `block.number >= lastDrawBlock + BLOCKS_BETWEEN_DRAWS`.
     function drawNumber(uint256 gameId) external;
 
-    /// Claim the per-player refund share once a game ends in `NoWinner`.
-    /// Credits the pull-payment ledger; call `withdraw()` to receive funds.
+    /// Claim the refund share for all of `msg.sender`'s tickets once a game
+    /// ends in `NoWinner`. Credits the pull-payment ledger; call `withdraw()`
+    /// to receive funds.
     function claimRefund(uint256 gameId) external;
 
     /// Withdraw all credited balance for `msg.sender`.
@@ -89,8 +91,8 @@ interface ITambola {
     function getGame(uint256 gameId) external view returns (GameView memory);
     function getDrawnNumbers(uint256 gameId) external view returns (uint8[] memory);
     function getTickets(uint256 gameId) external view returns (Ticket[] memory);
-    function getTicketByOwner(uint256 gameId, address player)
-        external view returns (uint256 ticketId, Ticket memory ticket);
+    function getTicketsByOwner(uint256 gameId, address player)
+        external view returns (uint256[] memory ticketIds, Ticket[] memory tickets);
 
     function isTicketHashUsed(uint256 gameId, bytes32 hashValue) external view returns (bool);
     function isRefundClaimed(uint256 gameId, address player)   external view returns (bool);
@@ -100,7 +102,7 @@ interface ITambola {
     // ---------------------------------------------------------------------
 
     function BLOCKS_BETWEEN_DRAWS() external view returns (uint8);
-    function MAX_PLAYERS()          external view returns (uint8);
+    function MAX_TICKETS()          external view returns (uint8);
     function FULLHOUSE_BPS()        external view returns (uint16);
     function LINE_BPS()             external view returns (uint16);
     function HOST_BPS()             external view returns (uint16);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,13 @@ import { useChatStore } from "@/lib/store/chat";
 
 import { getClient } from "@/lib/chain/client";
 import {
-  readGame, readDrawnNumbers, readTicketByOwner, readIsRefundClaimed, readWithdrawable,
+  readGame, readDrawnNumbers, readTickets, readTicketsByOwner, readIsRefundClaimed, readWithdrawable,
 } from "@/lib/tambola/read";
 import { callBuyTicket, callClaimRefund, callWithdraw } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
+import { gridFromMasks } from "@/lib/tambola/encode";
 import { CHAIN } from "@/lib/chain/constants";
-import { formatPlanck, shortenAddress } from "@/lib/utils";
+import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
 
 import type { TicketView } from "@/lib/tambola/abi";
 
@@ -40,7 +41,7 @@ export function GameView({ id }: { id: string }) {
   const setSelected = useWalletStore((s) => s.setSelected);
 
   const draft = useDraftStore((s) => s.byGame[gameId.toString()]);
-  const markBought = useDraftStore((s) => s.markBought);
+  const clearDraft = useDraftStore((s) => s.clear);
 
   const snap = useGameStore((s) => s.byId[gameId.toString()]);
   const setBestBlock = useGameStore((s) => s.setBestBlock);
@@ -52,12 +53,25 @@ export function GameView({ id }: { id: string }) {
 
   const closeChat = useChatStore((s) => s.close);
 
-  const [myTicket, setMyTicket] = useState<TicketView | null>(null);
+  const [myTickets,  setMyTickets]  = useState<TicketView[]>([]);
+  const [allTickets, setAllTickets] = useState<TicketView[]>([]);
+  const [tab, setTab] = useState<"mine" | "others">("mine");
   const [refundClaimed, setRefundClaimed] = useState<boolean>(false);
   const [withdrawable, setWithdrawableAmt] = useState<bigint>(0n);
   const [status, setStatus] = useState<string>("");
   const [busy,   setBusy]   = useState<boolean>(false);
   const [error,  setError]  = useState<string>("");
+
+  const refreshTickets = useCallback(async () => {
+    try {
+      const [all, mine] = await Promise.all([
+        readTickets(gameId),
+        selected ? readTicketsByOwner(gameId, selected) : Promise.resolve({ ids: [], tickets: [] }),
+      ]);
+      setAllTickets(all);
+      setMyTickets(mine.tickets);
+    } catch (e) { console.error(e); }
+  }, [gameId, selected]);
 
   // Initial load: pull game + drawn numbers from chain.
   useEffect(() => {
@@ -79,21 +93,23 @@ export function GameView({ id }: { id: string }) {
     return () => { cancel = true; };
   }, [gameId, setGame, setFinalWinner, setNoWinner]);
 
-  // My ticket + my withdrawable whenever wallet changes.
+  // Tickets + my withdrawable whenever the wallet changes.
   useEffect(() => {
-    if (!selected) { setMyTicket(null); setWithdrawableAmt(0n); return; }
+    void refreshTickets();
+    if (!selected) { setWithdrawableAmt(0n); return; }
     let cancel = false;
     (async () => {
       try {
-        const [id, ticket] = await readTicketByOwner(gameId, selected);
-        if (cancel) return;
-        setMyTicket(id > 0n ? ticket : null);
-        if (snap?.noWinner) setRefundClaimed(await readIsRefundClaimed(gameId, selected));
-        setWithdrawableAmt(await readWithdrawable(selected));
+        if (snap?.noWinner) {
+          const claimed = await readIsRefundClaimed(gameId, selected);
+          if (!cancel) setRefundClaimed(claimed);
+        }
+        const w = await readWithdrawable(selected);
+        if (!cancel) setWithdrawableAmt(w);
       } catch (e) { console.error(e); }
     })();
     return () => { cancel = true; };
-  }, [gameId, selected, snap?.noWinner]);
+  }, [gameId, selected, snap?.noWinner, refreshTickets]);
 
   // Subscribe to best-block.
   useEffect(() => {
@@ -116,6 +132,9 @@ export function GameView({ id }: { id: string }) {
         const evId = (e.args as any).gameId as bigint | undefined;
         if (evId !== gameId) return;
         switch (e.name) {
+          case "TicketBought":
+            void refreshTickets();
+            break;
           case "NumberDrawn":
             appendDrawn(gameId, e.args.number);
             break;
@@ -144,7 +163,7 @@ export function GameView({ id }: { id: string }) {
       });
     })();
     return () => { teardown?.(); };
-  }, [gameId, selected, appendDrawn, appendLineWinner, setFinalWinner, setNoWinner, setGame, closeChat]);
+  }, [gameId, selected, appendDrawn, appendLineWinner, setFinalWinner, setNoWinner, setGame, closeChat, refreshTickets]);
 
   const game = snap?.game;
   const drawn = snap?.drawn ?? [];
@@ -166,9 +185,11 @@ export function GameView({ id }: { id: string }) {
         ticketPrice: game.ticketPrice,
         onStatus: (s) => setStatus(s),
       });
-      markBought(gameId);
-      const [id, t] = await readTicketByOwner(gameId, account.address);
-      setMyTicket(id > 0n ? t : null);
+      clearDraft(gameId);                    // a fresh draft is generated for the next buy
+      await Promise.all([
+        refreshTickets(),
+        readGame(gameId).then((g) => setGame(gameId, { game: g })),
+      ]);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -216,11 +237,21 @@ export function GameView({ id }: { id: string }) {
 
   if (!game) return <div className="text-sm text-muted-foreground">Loading game…</div>;
 
-  const myRowHighlight =
-    lineWinner(0)?.winner.toLowerCase() === (selected ?? "").toLowerCase() ? 0 :
-    lineWinner(1)?.winner.toLowerCase() === (selected ?? "").toLowerCase() ? 1 :
-    lineWinner(2)?.winner.toLowerCase() === (selected ?? "").toLowerCase() ? 2 :
-    undefined;
+  const canBuy = game.state === 0 && game.ticketCount < game.maxTickets;
+
+  const myHashes = new Set(myTickets.map((t) => t.hash));
+  const otherTickets = allTickets.filter((t) => !myHashes.has(t.hash));
+
+  const polledMask = drawn.reduce((m, n) => m | (1n << BigInt(n - 1)), 0n);
+  const rowComplete = (mask: bigint) => mask !== 0n && (mask & polledMask) === mask;
+  const winRowFor = (t: TicketView): number | undefined => {
+    const masks = [t.topRowMask, t.middleRowMask, t.bottomRowMask];
+    for (const line of [0, 1, 2]) {
+      const w = lineWinner(line);
+      if (w && w.winner.toLowerCase() === t.owner.toLowerCase() && rowComplete(masks[line])) return line;
+    }
+    return undefined;
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -233,7 +264,7 @@ export function GameView({ id }: { id: string }) {
             </div>
             <CardDescription>
               Hosted by {shortenAddress(game.host)} ·
-              {" "}{game.playerCount}/{game.maxPlayers} players ·
+              {" "}{game.ticketCount}/{game.maxTickets} tickets ·
               {" "}pot {formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol)} ·
               {" "}starts in <Countdown startTime={game.startTime} />
             </CardDescription>
@@ -269,7 +300,7 @@ export function GameView({ id }: { id: string }) {
           </div>
         )}
 
-        {!myTicket && game.state === 0 && (
+        {canBuy && (
           <>
             <WalletStatus />
             <TicketGenerator
@@ -279,38 +310,72 @@ export function GameView({ id }: { id: string }) {
               decimals={CHAIN.decimals}
               disabled={busy || !isReady}
               onBuy={onBuy}
+              boughtCount={myTickets.length}
             />
           </>
         )}
 
-        {myTicket && draft && (
+        {(myTickets.length > 0 || otherTickets.length > 0) && (
           <Card>
-            <CardHeader><CardTitle className="text-lg">Your ticket</CardTitle></CardHeader>
-            <CardContent>
-              <TicketGrid grid={draft.grid} polledNumbers={drawn} highlightRow={myRowHighlight} />
-              <div className="mt-2 text-xs text-muted-foreground font-mono">hash {shortenAddress(myTicket.hash)}</div>
-            </CardContent>
-          </Card>
-        )}
-
-        {myTicket && !draft && (
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Your ticket</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Ticket exists on chain (hash {shortenAddress(myTicket.hash)}). The grid layout is kept in
-                this browser's local storage — open this page from the same device that bought the ticket
-                to see the cells light up as numbers are drawn.
+            <CardHeader>
+              <div className="flex gap-1 rounded-md bg-muted/50 p-1 w-fit">
+                <button
+                  onClick={() => setTab("mine")}
+                  className={cn(
+                    "rounded-sm px-3 py-1 text-sm font-medium transition-colors",
+                    tab === "mine" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  My tickets ({myTickets.length})
+                </button>
+                <button
+                  onClick={() => setTab("others")}
+                  className={cn(
+                    "rounded-sm px-3 py-1 text-sm font-medium transition-colors",
+                    tab === "others" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Other tickets ({otherTickets.length})
+                </button>
               </div>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-4">
+              {tab === "mine" && myTickets.length === 0 && (
+                <div className="text-sm text-muted-foreground">You have no tickets in this game yet.</div>
+              )}
+              {tab === "mine" && myTickets.map((t) => (
+                <div key={t.hash} className="space-y-1">
+                  <TicketGrid
+                    grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
+                    polledNumbers={drawn}
+                    highlightRow={winRowFor(t)}
+                  />
+                  <div className="text-xs text-muted-foreground font-mono">hash {shortenAddress(t.hash)}</div>
+                </div>
+              ))}
+              {tab === "others" && otherTickets.length === 0 && (
+                <div className="text-sm text-muted-foreground">No other tickets yet.</div>
+              )}
+              {tab === "others" && otherTickets.map((t) => (
+                <div key={t.hash} className="space-y-1">
+                  <TicketGrid
+                    grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
+                    polledNumbers={drawn}
+                    highlightRow={winRowFor(t)}
+                    size="sm"
+                  />
+                  <div className="text-xs text-muted-foreground font-mono">{shortenAddress(t.owner)}</div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}
 
-        {snap?.noWinner && myTicket && !refundClaimed && (
+        {snap?.noWinner && myTickets.length > 0 && !refundClaimed && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Game ended without a full house</CardTitle>
-              <CardDescription>Claim your refund share (settles to your withdrawable balance).</CardDescription>
+              <CardDescription>Claim the refund share for your {myTickets.length} ticket{myTickets.length > 1 ? "s" : ""} (settles to your withdrawable balance).</CardDescription>
             </CardHeader>
             <CardContent>
               <Button onClick={onRefund} disabled={busy}>Claim refund</Button>

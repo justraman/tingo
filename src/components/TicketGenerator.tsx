@@ -14,6 +14,7 @@ interface Props {
   decimals: number;
   disabled?: boolean;
   onBuy: () => void;
+  boughtCount?: number;
 }
 
 function format(amount: bigint, decimals: number): string {
@@ -24,7 +25,7 @@ function format(amount: bigint, decimals: number): string {
   return `${whole.toString()}.${rem.toString().padStart(decimals, "0").replace(/0+$/, "")}`;
 }
 
-export function TicketGenerator({ gameId, ticketPrice, tokenSymbol, decimals, disabled, onBuy }: Props) {
+export function TicketGenerator({ gameId, ticketPrice, tokenSymbol, decimals, disabled, onBuy, boughtCount = 0 }: Props) {
   const draft = useDraftStore((s) => s.byGame[gameId.toString()]);
   const regenerate = useDraftStore((s) => s.regenerate);
 
@@ -35,7 +36,7 @@ export function TicketGenerator({ gameId, ticketPrice, tokenSymbol, decimals, di
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-lg">Your ticket</CardTitle>
+        <CardTitle className="text-lg">{boughtCount > 0 ? "Buy another ticket" : "Your ticket"}</CardTitle>
         <Button variant="ghost" size="sm" onClick={() => regenerate(gameId)} disabled={disabled}>
           <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
         </Button>

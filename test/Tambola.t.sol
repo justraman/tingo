@@ -10,7 +10,7 @@ import {ITambola} from "../contracts/ITambola.sol";
 /// Covered scenarios:
 ///   - createGame: bad timestamp / zero price / startTime storage
 ///   - buyTicket:  layout validation (15 cells, 5/row, column ranges, monotone column, no dup),
-///                 hash dedup, wrong price, double-buy, max-players, post-start rejection
+///                 hash dedup, wrong price, multi-ticket per player, post-start rejection
 ///   - drawNumber: gating by startTime + BLOCKS_BETWEEN_DRAWS, end-state transitions
 ///   - payouts:    line wins credit withdrawable; full-house credits winner + host;
 ///                 unclaimed lines roll into full-house share; sum stays ≤ pot
@@ -127,8 +127,10 @@ contract TambolaTest is Test {
         uint256 gid = _createGame(120);
         _buy(gid, alice, _layoutA());
 
-        (uint256 ticketId, ITambola.Ticket memory t) = tambola.getTicketByOwner(gid, alice);
-        assertEq(ticketId, 1);
+        (uint256[] memory ids, ITambola.Ticket[] memory owned) = tambola.getTicketsByOwner(gid, alice);
+        assertEq(ids.length, 1);
+        assertEq(ids[0], 1);
+        ITambola.Ticket memory t = owned[0];
         assertEq(t.owner, alice);
 
         // 15 bits set in the full-house mask
@@ -163,7 +165,7 @@ contract TambolaTest is Test {
         _buy(gid, alice, _layoutA());
         _buy(gid, bob,   _layoutB());
         ITambola.GameView memory g = tambola.getGame(gid);
-        assertEq(g.playerCount, 2);
+        assertEq(g.ticketCount, 2);
         assertEq(g.pot, 2 * TICKET_PRICE);
     }
 
@@ -174,12 +176,29 @@ contract TambolaTest is Test {
         tambola.buyTicket{value: TICKET_PRICE / 2}(gid, _layoutA());
     }
 
-    function test_buyTicket_rejectsDoubleBuyBySameAddress() public {
+    function test_buyTicket_allowsMultipleTicketsPerPlayer() public {
+        uint256 gid = _createGame(120);
+        _buy(gid, alice, _layoutA());
+        _buy(gid, alice, _layoutB());
+
+        (uint256[] memory ids, ITambola.Ticket[] memory owned) = tambola.getTicketsByOwner(gid, alice);
+        assertEq(ids.length, 2);
+        assertEq(ids[0], 1);
+        assertEq(ids[1], 2);
+        assertEq(owned[0].owner, alice);
+        assertEq(owned[1].owner, alice);
+
+        ITambola.GameView memory g = tambola.getGame(gid);
+        assertEq(g.ticketCount, 2);
+        assertEq(g.pot, 2 * TICKET_PRICE);
+    }
+
+    function test_buyTicket_samePlayerStillCannotReuseLayout() public {
         uint256 gid = _createGame(120);
         _buy(gid, alice, _layoutA());
         vm.prank(alice);
-        vm.expectRevert(bytes("already bought"));
-        tambola.buyTicket{value: TICKET_PRICE}(gid, _layoutB());
+        vm.expectRevert(bytes("duplicate ticket"));
+        tambola.buyTicket{value: TICKET_PRICE}(gid, _layoutA());
     }
 
     function test_buyTicket_rejectsAfterStart() public {
@@ -243,10 +262,10 @@ contract TambolaTest is Test {
         tambola.drawNumber(gid);              // gap elapsed → OK
     }
 
-    function test_drawNumber_rejectsWithNoPlayers() public {
+    function test_drawNumber_rejectsWithNoTickets() public {
         uint256 gid = _createGame(4);
         _advanceToStart(gid);
-        vm.expectRevert(bytes("no players"));
+        vm.expectRevert(bytes("no tickets"));
         tambola.drawNumber(gid);
     }
 

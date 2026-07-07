@@ -4,9 +4,10 @@ pragma solidity ^0.8.20;
 import {ITambola} from "./ITambola.sol";
 
 /// @title Tambola — on-chain Indian Bingo
-/// @notice One contract holds many concurrent games. Each game has up to 100 players,
-///         a host-defined ticket price, a host-defined start block, and pays 15/15/15/50/5
-///         to top-line / middle-line / bottom-line / full-house / host.
+/// @notice One contract holds many concurrent games. Each game has up to 100 tickets
+///         (a player may hold several), a host-defined ticket price, a host-defined
+///         start block, and pays 15/15/15/50/5 to top-line / middle-line /
+///         bottom-line / full-house / host.
 /// @dev    Public types, events, and external function signatures live in ITambola.sol —
 ///         keep them in sync if you change either side.
 /// @custom:cdm @tambola/tambola
@@ -16,8 +17,8 @@ contract Tambola is ITambola {
         uint256 ticketPrice;     // wei (PAS has 10 decimals; pallet-revive treats it as 18 internally)
         uint64  startTime;       // unix seconds; game opens for draws once block.timestamp reaches it
         uint64  lastDrawBlock;
-        uint8   maxPlayers;
-        uint8   playerCount;
+        uint8   maxTickets;
+        uint8   ticketCount;
         uint128 polledMask;      // 90-bit bitmap of drawn numbers
         uint256 pot;             // total contributions (constant after the last buyTicket)
         GameState state;
@@ -31,7 +32,7 @@ contract Tambola is ITambola {
 
     mapping(uint256 => Game)                              internal _games;
     mapping(uint256 => mapping(bytes32 => bool))          internal _ticketHashSeen;
-    mapping(uint256 => mapping(address => uint256))       internal _playerTicketId;
+    mapping(uint256 => mapping(address => uint256[]))     internal _playerTicketIds;
     mapping(uint256 => mapping(address => bool))          internal _refundClaimed;
 
     /// Pull-payment ledger. All payouts (line wins, full house, host fee,
@@ -45,7 +46,7 @@ contract Tambola is ITambola {
     bool private _entered;
 
     uint8  public constant override BLOCKS_BETWEEN_DRAWS = 5;     // ~10 s on a 2 s chain
-    uint8  public constant override MAX_PLAYERS          = 100;
+    uint8  public constant override MAX_TICKETS          = 100;
     uint16 public constant override FULLHOUSE_BPS        = 5000;  // 50 %
     uint16 public constant override LINE_BPS             = 1500;  // 15 % each
     uint16 public constant override HOST_BPS             = 500;   //  5 %
@@ -72,7 +73,7 @@ contract Tambola is ITambola {
         Game storage g = _games[gameId];
         g.host        = msg.sender;
         g.ticketPrice = ticketPrice;
-        g.maxPlayers  = MAX_PLAYERS;
+        g.maxTickets  = MAX_TICKETS;
         g.state       = GameState.Pending;
         g.startTime   = uint64(startTimestamp);
 
@@ -90,8 +91,7 @@ contract Tambola is ITambola {
         require(g.state == GameState.Pending,      "not pending");
         require(block.timestamp < g.startTime,     "already started");
         require(msg.value == g.ticketPrice,        "wrong price");
-        require(g.playerCount < g.maxPlayers,      "full");
-        require(_playerTicketId[gameId][msg.sender] == 0, "already bought");
+        require(g.ticketCount < g.maxTickets,      "full");
 
         (uint128 fullMask, uint128 topMask, uint128 midMask, uint128 botMask) = _validateAndMask(layout);
 
@@ -108,8 +108,8 @@ contract Tambola is ITambola {
             hash:           layoutHash
         }));
         uint256 ticketId = g.tickets.length;
-        _playerTicketId[gameId][msg.sender] = ticketId;
-        g.playerCount++;
+        _playerTicketIds[gameId][msg.sender].push(ticketId);
+        g.ticketCount++;
         g.pot += msg.value;
 
         emit TicketBought(gameId, msg.sender, ticketId, layoutHash);
@@ -123,7 +123,7 @@ contract Tambola is ITambola {
         Game storage g = _games[gameId];
         require(g.host != address(0),                                  "no game");
         require(g.state == GameState.Pending || g.state == GameState.Live, "ended");
-        require(g.playerCount > 0,                                      "no players");
+        require(g.ticketCount > 0,                                      "no tickets");
         require(block.timestamp >= g.startTime,                         "not started");
         require(block.number >= g.lastDrawBlock + BLOCKS_BETWEEN_DRAWS, "too soon");
         require(g.drawnOrder.length < MAX_NUMBER,                       "all drawn");
@@ -149,16 +149,17 @@ contract Tambola is ITambola {
 
     function claimRefund(uint256 gameId) external override {
         Game storage g = _games[gameId];
-        require(g.state == GameState.NoWinner,             "not refundable");
-        require(_playerTicketId[gameId][msg.sender] != 0,  "no ticket");
-        require(!_refundClaimed[gameId][msg.sender],       "already claimed");
+        require(g.state == GameState.NoWinner,                     "not refundable");
+        uint256 ownedTickets = _playerTicketIds[gameId][msg.sender].length;
+        require(ownedTickets != 0,                                  "no ticket");
+        require(!_refundClaimed[gameId][msg.sender],                "already claimed");
 
         uint16 linesPaid =
             (g.topLineWinner    != address(0) ? 1 : 0) +
             (g.middleLineWinner != address(0) ? 1 : 0) +
             (g.bottomLineWinner != address(0) ? 1 : 0);
         uint256 potRemaining = g.pot * (10000 - LINE_BPS * linesPaid) / 10000;
-        uint256 amount       = potRemaining / g.playerCount;
+        uint256 amount       = (potRemaining / g.ticketCount) * ownedTickets;
 
         _refundClaimed[gameId][msg.sender] = true;
         _pay(msg.sender, amount);
@@ -306,8 +307,8 @@ contract Tambola is ITambola {
             ticketPrice:      g.ticketPrice,
             startTime:        g.startTime,
             lastDrawBlock:    g.lastDrawBlock,
-            maxPlayers:       g.maxPlayers,
-            playerCount:      g.playerCount,
+            maxTickets:       g.maxTickets,
+            ticketCount:      g.ticketCount,
             polledMask:       g.polledMask,
             pot:              g.pot,
             state:            g.state,
@@ -327,14 +328,17 @@ contract Tambola is ITambola {
         return _games[gameId].tickets;
     }
 
-    function getTicketByOwner(uint256 gameId, address player)
+    function getTicketsByOwner(uint256 gameId, address player)
         external
         view
         override
-        returns (uint256 ticketId, Ticket memory ticket)
+        returns (uint256[] memory ticketIds, Ticket[] memory tickets)
     {
-        ticketId = _playerTicketId[gameId][player];
-        if (ticketId > 0) ticket = _games[gameId].tickets[ticketId - 1];
+        ticketIds = _playerTicketIds[gameId][player];
+        tickets   = new Ticket[](ticketIds.length);
+        for (uint256 i = 0; i < ticketIds.length; i++) {
+            tickets[i] = _games[gameId].tickets[ticketIds[i] - 1];
+        }
     }
 
     function isTicketHashUsed(uint256 gameId, bytes32 hashValue) external view override returns (bool) {

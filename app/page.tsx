@@ -93,7 +93,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="space-y-1 text-sm">
               <div>Ticket: <span className="font-medium">{formatPlanck(game.ticketPrice, CHAIN.decimals, CHAIN.symbol)}</span></div>
-              <div>Players: {game.playerCount} / {game.maxPlayers}</div>
+              <div>Tickets: {game.ticketCount} / {game.maxTickets}</div>
               <div>Pot: <span className="font-medium">{formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol)}</span></div>
               <div className="text-xs text-muted-foreground">Drawn: {game.drawnCount.toString()} / 90</div>
             </CardContent>

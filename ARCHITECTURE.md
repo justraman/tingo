@@ -175,16 +175,18 @@ external signature, and constant; the frontend ABI derives from it. One contract
 
 ### 4.1 State per game
 
-`Game` packs: `host`, `ticketPrice`, `startTime` (unix seconds), `lastDrawBlock`, `maxPlayers`,
-`playerCount`, a 90-bit `polledMask` of drawn numbers, the `pot`, a `GameState`
+`Game` packs: `host`, `ticketPrice`, `startTime` (unix seconds), `lastDrawBlock`, `maxTickets`,
+`ticketCount`, a 90-bit `polledMask` of drawn numbers, the `pot`, a `GameState`
 (`Pending → Live → Won | NoWinner`), the four winner addresses, the ordered
 `drawnOrder[]`, and `tickets[]`. Side mappings: per-game layout-hash dedup
-(`_ticketHashSeen`), one-ticket-per-address (`_playerTicketId`), refund tracking
-(`_refundClaimed`), and the global pull-payment ledger `withdrawable`.
+(`_ticketHashSeen`), per-player ticket ids (`_playerTicketIds`, a player may hold
+several), refund tracking (`_refundClaimed`), and the global pull-payment ledger
+`withdrawable`.
 
 A `Ticket` stores only **bitmaps** (`fullhouseMask`, `topRowMask`, `middleRowMask`,
 `bottomRowMask`) plus the layout `hash` — never the row/col grid. Win-checking is then
-a pure bitmask AND. The human-readable grid lives only in the browser (see §6.3).
+a pure bitmask AND. Since a number's value fixes its column, the UI reconstructs any
+ticket's 3×9 grid from the row masks (`gridFromMasks` in `encode.ts`).
 
 ### 4.2 Lifecycle
 
@@ -192,7 +194,8 @@ a pure bitmask AND. The human-readable grid lives only in the browser (see §6.3
    wall-clock `startTimestamp` (unix seconds) directly as `startTime` and gates on
    `block.timestamp`, so no block-time estimate is needed. Emits `GameCreated`.
 2. **`buyTicket(gameId, uint8[27] layout)`** `payable` — must send exactly
-   `ticketPrice`, before `startTime`, ≤100 players, one ticket per address. The grid
+   `ticketPrice`, before `startTime`, ≤100 tickets per game; a player may buy any
+   number of tickets while capacity lasts (each layout unique). The grid
    is validated **in one pass** (`_validateAndMask`): 15 filled cells, exactly 5 per
    row, 1–3 per column, each value inside its column range
    (`col 0 → 1..9`, `col c → c·10..c·10+9`, `col 8 → 80..90`), strictly increasing
@@ -290,19 +293,19 @@ pallet-revive calls** over PAPI's unsafe API:
   viem `decodeEventLog`. Strongly-typed `TambolaEvent` union.
 - `encode.ts` — grid ⇆ `uint8[27]` row-major converters and `bitmasksFromLayout`
   mirroring the contract's bit layout (bit `i` ↔ number `i+1`).
-- `ticket.ts` — the ticket generator **ported verbatim** from `justraman/tambola`
-  (`Ticket`/`TicketNode`), with two changes: one ticket per call (from a 6-ticket
-  strip) and `crypto.getRandomValues` instead of `Math.random`. `validateTicket`
-  mirrors the contract's rules for friendly pre-submit UX.
+- `ticket.ts` — the ticket generator ported from `justraman/tambola`
+  (`Ticket`/`TicketNode`), with three deliberate changes: crypto RNG, restart on the
+  reference's placement dead-end (it can spin forever), and a max-run-of-2 rule (no
+  row carries 3+ adjacent numbers). `validateTicket` mirrors the contract's rules
+  for friendly pre-submit UX.
 - `abi.ts` — the ABI + `GameView`/`TicketView` TS types.
 
 ### 6.3 State (`src/lib/store/`, zustand)
 
 - `wallet` — selected address.
-- `draft` — **persisted to `localStorage`** (`tambola-drafts`): the generated grid +
-  encoded layout per game. This is the only place the human-readable grid exists; the
-  chain stores bitmaps only, so highlighting works only on the device that bought the
-  ticket.
+- `draft` — **persisted to `localStorage`** (`tambola-drafts`): the not-yet-purchased
+  draft (grid + encoded layout) per game. Bought tickets are read from chain and their
+  grids reconstructed from the row masks, so they render on any device.
 - `game` — live snapshot per id (game scalars, drawn numbers, line winners, final
   winner, no-winner flag) + global `bestBlock`.
 - `chat` — messages + closed flag per game.

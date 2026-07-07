@@ -47,9 +47,10 @@ it without prose.
    (bitmaps), `ticket.ts` `validateTicket`, `events.ts` (`TambolaEvent`), `abi.ts`
    types, and the Foundry tests. The frontend never invents validation the chain
    doesn't enforce.
-2. **On-chain stores bitmaps, not grids.** Tickets persist `*Mask` + `hash` only. The
-   human-readable 3×9 grid lives solely in the `draft` store (localStorage). Don't try
-   to read a grid back from chain.
+2. **On-chain stores bitmaps, not grids.** Tickets persist `*Mask` + `hash` only. But
+   a number's value fixes its column, so the 3×9 grid is fully reconstructable from
+   the three row masks — display goes through `gridFromMasks` (`encode.ts`). The
+   `draft` store (localStorage) holds only the not-yet-purchased draft.
 3. **`drawNumber` stays permissionless.** It is the liveness guarantee — anyone can
    poke it. Never gate it behind the host or an owner.
 4. **Money is pull, not push.** All payouts credit `withdrawable`; recipients

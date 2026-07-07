@@ -46,6 +46,7 @@ async function buildContractCall(
     undefined,
     undefined,
     dataBin,
+    { at: "best" },
   );
   if (!dryRun.result.success) {
     throw new Error(`dry-run failed for ${functionName}: ${describeDispatchError(dryRun.result.value)}`);

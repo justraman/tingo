@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-07T13:06:26.806Z",
+  "contracts": [
+    {
+      "name": "@tambola/tambola",
+      "displayName": "@tambola/tambola",
+      "toolchain": "foundry",
+      "cdmPackage": "@tambola/tambola",
+      "bytecodePath": "/Users/raman/Work/tambola-game/target/cdm/foundry/_tambola_tambola.polkavm",
+      "abiPath": "/Users/raman/Work/tambola-game/forge-out/Tambola.sol/Tambola.json",
+      "artifactPath": "/Users/raman/Work/tambola-game/forge-out/Tambola.sol/Tambola.json",
+      "sourcePath": "/Users/raman/Work/tambola-game/contracts/Tambola.sol",
+      "contractName": "Tambola",
+      "bytecodeSize": 100949
+    }
+  ]
+}

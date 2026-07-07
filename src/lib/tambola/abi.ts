@@ -54,8 +54,8 @@ export const TAMBOLA_ABI = [
         { name: "ticketPrice",      type: "uint256" },
         { name: "startTime",        type: "uint64"  },
         { name: "lastDrawBlock",    type: "uint64"  },
-        { name: "maxPlayers",       type: "uint8"   },
-        { name: "playerCount",      type: "uint8"   },
+        { name: "maxTickets",       type: "uint8"   },
+        { name: "ticketCount",      type: "uint8"   },
         { name: "polledMask",       type: "uint128" },
         { name: "pot",              type: "uint256" },
         { name: "state",            type: "uint8"   },
@@ -88,15 +88,15 @@ export const TAMBOLA_ABI = [
     }],
   },
   {
-    type: "function", name: "getTicketByOwner", stateMutability: "view",
+    type: "function", name: "getTicketsByOwner", stateMutability: "view",
     inputs: [
       { name: "gameId", type: "uint256" },
       { name: "player", type: "address" },
     ],
     outputs: [
-      { name: "ticketId", type: "uint256" },
+      { name: "ticketIds", type: "uint256[]" },
       {
-        name: "ticket", type: "tuple",
+        name: "tickets", type: "tuple[]",
         components: [
           { name: "owner",          type: "address" },
           { name: "fullhouseMask",  type: "uint128" },
@@ -198,8 +198,8 @@ export interface GameView {
   ticketPrice: bigint;
   startTime: bigint;
   lastDrawBlock: bigint;
-  maxPlayers: number;
-  playerCount: number;
+  maxTickets: number;
+  ticketCount: number;
   polledMask: bigint;
   pot: bigint;
   state: number;

@@ -27,6 +27,8 @@ async function readContract<T = unknown>(functionName: string, args: Args = []):
   const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName, args });
 
   // PAPI v2 + metadata v16: H160 params are hex strings, Bytes results are Uint8Array.
+  // `at: "best"` — reads reflect just-included transactions instead of lagging
+  // behind by the finalization delay.
   const dryRun = await unsafe.apis.ReviveApi.call(
     READ_ONLY_ORIGIN,
     TAMBOLA_ADDRESS.toLowerCase(),
@@ -34,6 +36,7 @@ async function readContract<T = unknown>(functionName: string, args: Args = []):
     undefined,
     undefined,
     Binary.fromHex(calldata),
+    { at: "best" },
   );
 
   if (!dryRun.result.success) throw new Error(`dry-run failed for ${functionName}`);
@@ -62,8 +65,10 @@ export const readTickets = (gameId: bigint) =>
   readContract<readonly TicketView[]>("getTickets", [gameId]).then((arr) => Array.from(arr));
 
 // Player params take SS58 or H160 — the contract only knows H160.
-export const readTicketByOwner = (gameId: bigint, player: string) =>
-  readContract<readonly [bigint, TicketView]>("getTicketByOwner", [gameId, toH160(player)]);
+export const readTicketsByOwner = (gameId: bigint, player: string) =>
+  readContract<readonly [readonly bigint[], readonly TicketView[]]>(
+    "getTicketsByOwner", [gameId, toH160(player)],
+  ).then(([ids, tickets]) => ({ ids: Array.from(ids), tickets: Array.from(tickets) }));
 
 export const readIsTicketHashUsed = (gameId: bigint, hash: `0x${string}`) =>
   readContract<boolean>("isTicketHashUsed", [gameId, hash]);

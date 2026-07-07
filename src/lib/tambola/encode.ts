@@ -56,3 +56,25 @@ export function bitmasksFromLayout(layout: TicketLayout): {
 export function maskHas(mask: bigint, n: number): boolean {
   return (mask & (1n << BigInt(n - 1))) !== 0n;
 }
+
+/** Column of a number on a tambola ticket: 1–9 → 0, 10–19 → 1, …, 80–90 → 8. */
+function columnOf(n: number): number {
+  return n === 90 ? 8 : Math.floor(n / 10);
+}
+
+/**
+ * Rebuild the full 3×9 grid from the three on-chain row masks. Within a row
+ * every number sits in a distinct column, so the masks determine the grid
+ * exactly — any ticket (including other players') is displayable from chain
+ * data alone.
+ */
+export function gridFromMasks(top: bigint, middle: bigint, bottom: bigint): number[][] {
+  const grid: number[][] = Array.from({ length: 3 }, () => Array(9).fill(0));
+  const rows = [top, middle, bottom];
+  for (let row = 0; row < 3; row++) {
+    for (let n = 1; n <= 90; n++) {
+      if (maskHas(rows[row], n)) grid[row][columnOf(n)] = n;
+    }
+  }
+  return grid;
+}
