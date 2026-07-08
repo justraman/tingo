@@ -12,3 +12,4 @@ typechain-types/
 .wrangler/
 /cloudflare/.wrangler/*
 .cdm
+.dev.vars

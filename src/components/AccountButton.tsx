@@ -51,6 +51,7 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // The SS58 form on purpose — this is the address people fund from a wallet.
   async function copyAddress() {
     await navigator.clipboard.writeText(address);
     setCopied(true);
@@ -74,7 +75,7 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
       </button>
 
       {open && (
-        <div className="glass-strong animate-rise absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl p-4">
+        <div className="glass-popover animate-rise absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl p-4">
           <div className="text-sm font-semibold">{label}</div>
 
           <button

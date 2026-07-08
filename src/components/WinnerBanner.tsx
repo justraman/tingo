@@ -1,5 +1,6 @@
 import { Trophy, CircleDot } from "lucide-react";
-import { displayAddress, formatPlanck } from "@/lib/utils";
+import { formatPlanck } from "@/lib/utils";
+import { AddressLabel } from "@/components/AddressLabel";
 import { CHAIN } from "@/lib/chain/constants";
 import type { FullhousePrize, LinePrize } from "@/lib/tambola/prize";
 
@@ -38,7 +39,7 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
               </span>
               {winners.map((w, j) => (
                 <span key={j} className="flex items-center gap-1.5">
-                  <span className="font-mono text-foreground/90">{displayAddress(w.winner)}</span>
+                  <span className="font-mono text-foreground/90"><AddressLabel address={w.winner} /></span>
                   <span className="text-muted-foreground">won {formatPlanck(w.payout, CHAIN.decimals, CHAIN.symbol)}</span>
                 </span>
               ))}
@@ -55,12 +56,12 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
                 {fullhouse.map((w, i) => (
                   <div key={i} className="text-base font-semibold leading-tight">
                     Full house{fullhouse.length > 1 ? " (split)" : ""} —{" "}
-                    <span className="font-mono">{displayAddress(w.winner)}</span>
+                    <span className="font-mono"><AddressLabel address={w.winner} /></span>
                     <span className="ml-2 text-[hsl(var(--gold))]">{formatPlanck(w.payout, CHAIN.decimals, CHAIN.symbol)}</span>
                   </div>
                 ))}
                 <div className="text-xs text-muted-foreground">
-                  Host {displayAddress(fullhouse[0].host)} earned {formatPlanck(fullhouse[0].hostFee, CHAIN.decimals, CHAIN.symbol)}
+                  Host <AddressLabel address={fullhouse[0].host} /> earned {formatPlanck(fullhouse[0].hostFee, CHAIN.decimals, CHAIN.symbol)}
                 </div>
               </div>
             </div>

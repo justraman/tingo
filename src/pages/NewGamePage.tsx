@@ -110,7 +110,7 @@ export function NewGamePage() {
             <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Prize split</div>
             <PrizeSplitBar />
             <div className="text-xs text-muted-foreground">
-              Max 100 players. Numbers are drawn every {DRAW_INTERVAL_SECONDS} s after start. Unclaimed line shares roll into the full house.
+              Max 100 players. Numbers are drawn every {DRAW_INTERVAL_SECONDS} s after start.
             </div>
           </div>
         </CardContent>

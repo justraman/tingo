@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -6,20 +6,13 @@ interface Props {
   latest?: number;
 }
 
-// One muted hue per decade (1–10, 11–20, …), matching the ticket-paper palette.
-const BALL_HUES = [
-  "14 58% 52%",  // terracotta
-  "40 62% 50%",  // ochre
-  "162 40% 44%", // jade
-  "205 52% 52%", // steel
-  "262 42% 56%", // amethyst
-  "342 45% 54%", // rosewood
-  "88 35% 46%",  // moss
-  "22 52% 50%",  // clay
-  "190 42% 46%", // teal
-];
-
-const ballHue = (n: number) => BALL_HUES[Math.min(Math.floor((n - 1) / 10), 8)];
+// Underdamped springs so the drop overshoots and wobbles before settling.
+const DROP_TRANSITION = {
+  y: { type: "spring", stiffness: 340, damping: 17 } as const,
+  scaleX: { type: "spring", stiffness: 210, damping: 6 } as const,
+  scaleY: { type: "spring", stiffness: 210, damping: 6 } as const,
+  opacity: { duration: 0.2 } as const,
+};
 
 export function NumberBoard({ drawn, latest }: Props) {
   const history = [...drawn].reverse();
@@ -29,16 +22,20 @@ export function NumberBoard({ drawn, latest }: Props) {
       <div className="flex items-center gap-5">
         <div key={latest ?? "none"} className={cn("relative h-24 w-24 shrink-0", latest !== undefined && "ripple-once")}>
           {latest !== undefined ? (
-            <div
-              className="draw-ball absolute inset-0 rounded-full"
-              style={{ "--ball": ballHue(latest) } as CSSProperties}
+            <motion.div
+              key={latest}
+              className="absolute inset-0"
+              initial={{ y: -30, scaleX: 0.75, scaleY: 1.25, opacity: 0 }}
+              animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1 }}
+              transition={DROP_TRANSITION}
             >
+              <div className="draw-ball absolute inset-0" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="draw-ball-label font-game flex h-[52px] w-[52px] items-center justify-center rounded-full text-3xl font-bold tabular-nums">
-                  <span className="animate-number-in">{latest}</span>
+                <span className="draw-ball-number font-game text-3xl font-bold tabular-nums">
+                  <span className="animate-number-in inline-block">{latest}</span>
                 </span>
               </div>
-            </div>
+            </motion.div>
           ) : (
             <>
               <div className="glass-strong absolute inset-0 rounded-full" />

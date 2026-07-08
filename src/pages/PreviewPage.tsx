@@ -11,6 +11,7 @@ import { NumberBoard } from "@/components/NumberBoard";
 import { WinnerBanner } from "@/components/WinnerBanner";
 import { GameRules } from "@/components/GameRules";
 import { ChatPanel } from "@/components/ChatPanel";
+import { EmojiRain } from "@/components/EmojiRain";
 import { TxStatusModal } from "@/components/TxStatusModal";
 import { AccountButtonView } from "@/components/AccountButton";
 import { useChatStore } from "@/lib/store/chat";
@@ -103,6 +104,7 @@ export function PreviewPage() {
       />
 
       <div className="h-[36rem]">
+        <EmojiRain gameId={MOCK_CHAT_GAME} />
         <ChatPanel gameId={MOCK_CHAT_GAME} />
       </div>
 

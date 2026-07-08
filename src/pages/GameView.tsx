@@ -8,6 +8,7 @@ import { NumberBoard } from "@/components/NumberBoard";
 import { Countdown } from "@/components/Countdown";
 import { TicketGenerator } from "@/components/TicketGenerator";
 import { ChatPanel } from "@/components/ChatPanel";
+import { EmojiRain } from "@/components/EmojiRain";
 import { WalletStatus } from "@/components/WalletStatus";
 import { WinnerBanner } from "@/components/WinnerBanner";
 import { GameRules } from "@/components/GameRules";
@@ -30,7 +31,8 @@ import { playNumber, stopPlayback } from "@/lib/sound";
 import { useSoundStore } from "@/lib/store/sound";
 import { gridFromMasks } from "@/lib/tambola/encode";
 import { DRAW_INTERVAL_SECONDS, CHAIN } from "@/lib/chain/constants";
-import { formatPlanck, shortenAddress, displayAddress, cn } from "@/lib/utils";
+import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
+import { AddressLabel } from "@/components/AddressLabel";
 import { hueFromSeed } from "@/lib/ticket-hues";
 import { Coins, Volume2, VolumeX, Zap } from "lucide-react";
 
@@ -293,7 +295,7 @@ export function GameView({ id }: { id: string }) {
 
   if (!game) {
     return (
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
         <div className="flex flex-col gap-5">
           <div className="skeleton h-36 rounded-3xl" />
           <div className="skeleton h-96 rounded-3xl" />
@@ -330,7 +332,8 @@ export function GameView({ id }: { id: string }) {
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+    <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+      <EmojiRain gameId={gameId} />
       <div className="flex flex-col gap-5">
         <div className="glass animate-rise rounded-3xl p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -348,7 +351,7 @@ export function GameView({ id }: { id: string }) {
               )}
             </div>
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">Hosted by {displayAddress(game.host)}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Hosted by <AddressLabel address={game.host} /></div>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {stats.map((s) => (
               <div key={s.label} className="glass-inset rounded-2xl px-4 py-3">
@@ -459,7 +462,7 @@ export function GameView({ id }: { id: string }) {
                     highlightRow={ended ? undefined : wonRowsFor(t)[0]}
                     struckRows={ended ? wonRowsFor(t) : undefined}
                     overlay={overlayFor(t)}
-                    overlayMode={ended ? "cover" : "ribbon"}
+                    overlayMode="cover"
                     hue={hueFromSeed(t.hash)}
                   />
                   <div className="font-mono text-xs text-muted-foreground">hash {shortenAddress(t.hash)}</div>
@@ -476,11 +479,11 @@ export function GameView({ id }: { id: string }) {
                     highlightRow={ended ? undefined : wonRowsFor(t)[0]}
                     struckRows={ended ? wonRowsFor(t) : undefined}
                     overlay={overlayFor(t)}
-                    overlayMode={ended ? "cover" : "ribbon"}
+                    overlayMode="cover"
                     size="sm"
                     hue={hueFromSeed(t.hash)}
                   />
-                  <div className="font-mono text-xs text-muted-foreground">{displayAddress(t.owner)}</div>
+                  <div className="font-mono text-xs text-muted-foreground"><AddressLabel address={t.owner} /></div>
                 </div>
               ))}
             </CardContent>

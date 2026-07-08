@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { isHostAsync } from "@/lib/host/detect";
 import { readNextGameId, readGame } from "@/lib/tambola/read";
 import { CHAIN } from "@/lib/chain/constants";
-import { formatPlanck, displayAddress } from "@/lib/utils";
+import { formatPlanck } from "@/lib/utils";
+import { AddressLabel } from "@/components/AddressLabel";
 import { ArrowRight, Ticket, Trophy } from "lucide-react";
 import type { GameView } from "@/lib/tambola/abi";
 import { STATE_LABELS, STATE_VARIANTS, effectiveState } from "@/lib/tambola/state";
@@ -24,7 +25,7 @@ function GameCard({ id, game, state, index }: Listing & { index: number }) {
           <span className="font-game text-lg font-bold tracking-tight">Game #{id.toString()}</span>
           <Badge variant={STATE_VARIANTS[state] ?? "outline"}>{STATE_LABELS[state]}</Badge>
         </div>
-        <div className="mt-1 text-xs text-muted-foreground">Host {displayAddress(game.host)}</div>
+        <div className="mt-1 text-xs text-muted-foreground">Host <AddressLabel address={game.host} /></div>
 
         <div className="mt-5 flex items-end justify-between">
           <div>

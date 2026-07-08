@@ -104,9 +104,8 @@ export function GameRules({ shares, className }: { shares?: PrizeBps; className?
             <Dialog.Description asChild>
               <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
                 Each prize goes to the first ticket to complete it — tickets completing
-                on the same draw split it equally. Line prizes nobody wins
-                roll into the full house
-                {shares ? <>, and the host earns {pct(shares.hostBps)}</> : null}.
+                on the same draw split it equally
+                {shares ? <>. The host earns {pct(shares.hostBps)}</> : null}.
               </p>
             </Dialog.Description>
           </div>
