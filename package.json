@@ -11,9 +11,12 @@
     "papi:install": "papi",
     "papi:add": "papi add paseo_asset_hub -w wss://paseo-asset-hub-next-rpc.polkadot.io",
     "test:contract": "forge test -vv",
+    "cf:typecheck": "tsc --noEmit -p cloudflare",
+    "cf:dev": "wrangler dev --config cloudflare/wrangler.jsonc --test-scheduled",
+    "cf:deploy": "wrangler deploy --config cloudflare/wrangler.jsonc",
     "compile:contract": "forge build",
     "deploy:contract": "playground contract deploy --signer dev",
-    "deploy:app": "npm run build && playground deploy --signer dev --domain tambola-game --buildDir ./out --env paseo-next-v2 --playground"
+    "deploy:app": "npm run build && playground deploy --signer dev --domain tambola-game --buildDir ./out --no-build --playground"
   },
   "dependencies": {
     "@parity/product-sdk-address": "^0.1.1",
@@ -23,6 +26,8 @@
     "@parity/product-sdk-statement-store": "^0.5.0",
     "@polkadot-api/descriptors": "file:.papi/descriptors",
     "@polkadot-api/json-rpc-provider": "^0.2.0",
+    "@polkadot-labs/hdkd": "^0.0.29",
+    "@polkadot-labs/hdkd-helpers": "^0.0.31",
     "@radix-ui/react-dialog": "^1.1.2",
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-scroll-area": "^1.2.0",
@@ -40,6 +45,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260708.1",
     "@polkadot-api/cli": "^0.18.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -50,6 +56,7 @@
     "tailwindcss": "^3.4.14",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.7.0",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "wrangler": "^4.108.0"
   }
 }

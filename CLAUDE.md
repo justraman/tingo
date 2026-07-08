@@ -66,7 +66,8 @@ it without prose.
    host getter (`getChatManager`, `getHostProvider`, …) **returns `null` outside a
    host** — always handle that branch; standalone must degrade, not crash.
 7. **Keep chain constants in one place.** `CHAIN` (`src/lib/chain/constants.ts`) and the
-   contract constants must agree — especially block time and `BLOCKS_BETWEEN_DRAWS`.
+   contract constants must agree — especially `DRAW_INTERVAL_SECONDS`. Game timing is
+   wall-clock (`block.timestamp`) everywhere; never reintroduce block-number timing.
    Read on-chain constants where you can instead of hardcoding a second copy.
 8. **Single-document SPA is non-negotiable.** The host and DotNS gateways only ever
    serve the root document — direct page access is unsupported by design. The URL
@@ -82,21 +83,24 @@ bun install
 
 # contract tests — VANILLA forge
 export PATH="$HOME/.foundry/bin:$PATH"
-forge test -vv                         # keep green; 19 cases today
+forge test -vv                         # keep green; 21 cases today
 
 # compile to PolkaVM — POLKADOT forge + seeded resolc 0.6.0
 export PATH="$HOME/.foundry-polkadot/bin:$PATH"
 forge build --resolc                   # → target/cdm/foundry/Tambola.polkavm
 
-# deploy contract, then paste the printed H160 into .env.local
-playground contract deploy --signer dev --env paseo-next-v2   # NEXT_PUBLIC_TAMBOLA_ADDRESS=0x...
+# deploy contract, then paste the printed H160 into .env.local AND cloudflare/wrangler.jsonc
+playground contract deploy --signer dev   # NEXT_PUBLIC_TAMBOLA_ADDRESS=0x... (v0.45+ has no --env; targets paseo-next-v2)
 
 # generate PAPI descriptors (for typed api.tx.Revive.* paths)
 bun run papi:add
 
 # dev UI (standalone mode) / full deploy
 bun run dev
-bun run build && playground deploy --signer dev --domain tambola-game --buildDir ./out --env paseo-next-v2 --playground
+bun run build && playground deploy --signer dev --domain tambola-game --buildDir ./out --no-build --playground
+
+# cloudflare worker (drawer cron every minute + D1 indexer every 5 min) — see cloudflare/README.md
+bun run cf:typecheck && bun run cf:deploy
 ```
 
 ## Environment gotchas

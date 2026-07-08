@@ -1,40 +1,41 @@
 /**
- * Tambola worker.
+ * Tambola worker (Triangle host sandbox — no filesystem, no direct HTTP).
  *
  * Two jobs:
  *   1. Announce game milestones (welcome / full house / no winner) in each
- *      game's statement-store chat room, keyed by `GameCreated` /
- *      `GameWon` / `GameEndedNoWinner` contract events.
- *
+ *      game's statement-store chat room, keyed by contract events.
  *   2. Drive the game forward by calling `drawNumber(gameId)` once
- *      `block.timestamp >= startTime` and at least `BLOCKS_BETWEEN_DRAWS`
- *      blocks since the last draw. `drawNumber` is permissionless so the
- *      worker is a convenience, not a trust anchor — a player can still poke
- *      the game forward from the browser.
+ *      `block.timestamp >= startTime` and `DRAW_INTERVAL_SECONDS` since the
+ *      last draw. `drawNumber` is permissionless so the worker is a
+ *      convenience, not a trust anchor — a player can still poke the game
+ *      forward from the browser.
  *
- * Runs inside the Polkadot Triangle host worker sandbox. No filesystem or
- * direct HTTP allowed.
+ * On startup it scans `nextGameId`/`getGame` so a restarted worker resumes
+ * driving games that were created while it was down.
  */
 
 import { createClient, Binary } from "polkadot-api";
-import { bytesToHex, encodeFunctionData, decodeEventLog, type Abi } from "viem";
+import { bytesToHex, encodeFunctionData, decodeFunctionResult, decodeEventLog, type Abi } from "viem";
 import { getHostProvider } from "@parity/product-sdk-host";
 import { StatementStoreClient } from "@parity/product-sdk-statement-store";
 
 import { ss58ToH160 } from "@parity/product-sdk-address";
 import { CHAT_APP_NAME, CHAT_TTL_SECONDS, roomIdForGame, type ChatPayload } from "../src/lib/chat/protocol";
-import { TAMBOLA_ABI } from "../src/lib/tambola/abi";
-import { BLOCKS_BETWEEN_DRAWS, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
+import { TAMBOLA_ABI, type GameView } from "../src/lib/tambola/abi";
+import { DRAW_INTERVAL_SECONDS, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS, CHAIN } from "../src/lib/chain/constants";
 import { ensureSignerConnected, signerManager } from "../src/lib/chain/signer";
 
 interface ActiveGame {
-  startTime: bigint;            // unix seconds
-  lastDrawBlock: bigint;
-  state: number;        // 0=Pending 1=Live 2=Won 3=NoWinner
+  startTime: bigint;      // unix seconds
+  lastDrawTime: bigint;   // unix seconds; 0 until the first draw
+  hasTickets: boolean;
+  state: number;          // 0=Pending 1=Live
   pendingTx: boolean;
 }
 
 const active = new Map<string, ActiveGame>();
+
+const nowSeconds = () => BigInt(Math.floor(Date.now() / 1000));
 
 async function connectChat(): Promise<StatementStoreClient | null> {
   try {
@@ -59,6 +60,40 @@ async function announce(chat: StatementStoreClient | null, gameId: bigint, text:
   }
 }
 
+async function readContract<T>(unsafe: any, functionName: string, args: readonly unknown[] = []): Promise<T> {
+  const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName, args });
+  const dryRun = await unsafe.apis.ReviveApi.call(
+    READ_ONLY_ORIGIN, TAMBOLA_ADDRESS.toLowerCase(), 0n, undefined, undefined,
+    Binary.fromHex(calldata), { at: "best" },
+  );
+  if (!dryRun.result.success) throw new Error(`dry-run failed for ${functionName}`);
+  if (dryRun.result.value.flags & 1) throw new Error(`contract reverted in ${functionName}`);
+  const raw = dryRun.result.value.data;
+  const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
+  return decodeFunctionResult({ abi: TAMBOLA_ABI as Abi, functionName, data }) as T;
+}
+
+/** Seed `active` from chain state so a restart resumes in-flight games. */
+async function bootstrapActiveGames(unsafe: any) {
+  const nextGameId = await readContract<bigint>(unsafe, "nextGameId");
+  for (let id = 1n; id <= nextGameId; id++) {
+    try {
+      const g = await readContract<GameView>(unsafe, "getGame", [id]);
+      if (g.state !== 0 && g.state !== 1) continue;
+      active.set(id.toString(), {
+        startTime:    g.startTime,
+        lastDrawTime: g.lastDrawTime,
+        hasTickets:   g.ticketCount > 0,
+        state:        g.state,
+        pendingTx:    false,
+      });
+    } catch (e) {
+      console.warn("[tambola-worker] bootstrap skipped game", id.toString(), e);
+    }
+  }
+  console.log(`[tambola-worker] bootstrapped ${active.size} active game(s)`);
+}
+
 async function main() {
   const chat = await connectChat();
 
@@ -72,6 +107,8 @@ async function main() {
   if (!account) throw new Error("worker: no signer account");
   const signer = account.getSigner();
   const signerAddress = account.address;
+
+  await bootstrapActiveGames(unsafe);
 
   // PAPI v2 + metadata v16: H160/H256 fields are hex strings, Bytes are Uint8Array.
   const toHexString = (v: any): `0x${string}` =>
@@ -96,42 +133,40 @@ async function main() {
       if (decoded.eventName === "GameCreated") {
         await announce(chat, gameId, `Welcome to Tambola #${gameId.toString()}. Good luck! 🎯`);
         active.set(key, {
-          startTime:     decoded.args.startTime as bigint,
-          lastDrawBlock: 0n,
-          state:         0,
-          pendingTx:     false,
+          startTime:    decoded.args.startTime as bigint,
+          lastDrawTime: 0n,
+          hasTickets:   false,
+          state:        0,
+          pendingTx:    false,
         });
+      } else if (decoded.eventName === "TicketBought") {
+        const a = active.get(key);
+        if (a) a.hasTickets = true;
       } else if (decoded.eventName === "NumberDrawn") {
         const a = active.get(key);
         if (a) {
-          a.lastDrawBlock = decoded.args.blockNumber as bigint;
-          a.state         = 1;
-          a.pendingTx     = false;
+          a.lastDrawTime = decoded.args.drawnAt as bigint;
+          a.state        = 1;
+          a.pendingTx    = false;
         }
       } else if (decoded.eventName === "GameWon") {
         await announce(chat, gameId, `🏆 Full house! Game over.`);
-        const a = active.get(key); if (a) a.state = 2;
         active.delete(key);
       } else if (decoded.eventName === "GameEndedNoWinner") {
         await announce(chat, gameId, `Game ended without a full house — refunds available.`);
-        const a = active.get(key); if (a) a.state = 3;
         active.delete(key);
       }
     },
   });
 
-  // ---- per-block draw poker ---------------------------------------------
+  // ---- draw poker: each new best block is the clock tick ------------------
   const blockSub = client.bestBlocks$.subscribe({
-    next: async (blocks: any) => {
-      const head = blocks[0];
-      if (!head) return;
-      const blockNumber = BigInt(head.number);
-
+    next: async () => {
+      const now = nowSeconds();
       for (const [key, g] of active) {
-        if (g.state !== 0 && g.state !== 1) continue;
-        if (g.pendingTx) continue;
-        if (BigInt(Math.floor(Date.now() / 1000)) < g.startTime) continue;
-        if (g.lastDrawBlock !== 0n && blockNumber < g.lastDrawBlock + BigInt(BLOCKS_BETWEEN_DRAWS)) continue;
+        if (g.pendingTx || !g.hasTickets) continue;
+        if (now < g.startTime) continue;
+        if (now < g.lastDrawTime + BigInt(DRAW_INTERVAL_SECONDS)) continue;
 
         g.pendingTx = true;
         const gameId = BigInt(key);

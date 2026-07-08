@@ -6,8 +6,9 @@ import {ITambola} from "./ITambola.sol";
 /// @title Tambola — on-chain Indian Bingo
 /// @notice One contract holds many concurrent games. Each game has up to 100 tickets
 ///         (a player may hold several), a host-defined ticket price, a host-defined
-///         start block, and pays 15/15/15/50/5 to top-line / middle-line /
-///         bottom-line / full-house / host.
+///         start time, and pays 15/15/15/50/5 to top-line / middle-line /
+///         bottom-line / full-house / host. All timing is wall-clock
+///         (`block.timestamp`) — block numbers play no role in game rules.
 /// @dev    Public types, events, and external function signatures live in ITambola.sol —
 ///         keep them in sync if you change either side.
 /// @custom:cdm @tambola/tambola
@@ -16,7 +17,7 @@ contract Tambola is ITambola {
         address host;
         uint256 ticketPrice;     // wei (PAS has 10 decimals; pallet-revive treats it as 18 internally)
         uint64  startTime;       // unix seconds; game opens for draws once block.timestamp reaches it
-        uint64  lastDrawBlock;
+        uint64  lastDrawTime;    // unix seconds of the latest draw; 0 until the first draw
         uint8   maxTickets;
         uint8   ticketCount;
         uint128 polledMask;      // 90-bit bitmap of drawn numbers
@@ -45,8 +46,8 @@ contract Tambola is ITambola {
 
     bool private _entered;
 
-    uint8  public constant override BLOCKS_BETWEEN_DRAWS = 5;     // ~10 s on a 2 s chain
-    uint8  public constant override MAX_TICKETS          = 100;
+    uint16 public constant override DRAW_INTERVAL_SECONDS = 12;
+    uint8  public constant override MAX_TICKETS            = 100;
     uint16 public constant override FULLHOUSE_BPS        = 5000;  // 50 %
     uint16 public constant override LINE_BPS             = 1500;  // 15 % each
     uint16 public constant override HOST_BPS             = 500;   //  5 %
@@ -124,17 +125,17 @@ contract Tambola is ITambola {
         require(g.host != address(0),                                  "no game");
         require(g.state == GameState.Pending || g.state == GameState.Live, "ended");
         require(g.ticketCount > 0,                                      "no tickets");
-        require(block.timestamp >= g.startTime,                         "not started");
-        require(block.number >= g.lastDrawBlock + BLOCKS_BETWEEN_DRAWS, "too soon");
-        require(g.drawnOrder.length < MAX_NUMBER,                       "all drawn");
+        require(block.timestamp >= g.startTime,                             "not started");
+        require(block.timestamp >= g.lastDrawTime + DRAW_INTERVAL_SECONDS,  "too soon");
+        require(g.drawnOrder.length < MAX_NUMBER,                           "all drawn");
 
         if (g.state == GameState.Pending) g.state = GameState.Live;
 
         uint8 n = _nextNumber(g);
         g.polledMask |= uint128(1) << (n - 1);
         g.drawnOrder.push(n);
-        g.lastDrawBlock = uint64(block.number);
-        emit NumberDrawn(gameId, n, uint64(block.number));
+        g.lastDrawTime = uint64(block.timestamp);
+        emit NumberDrawn(gameId, n, uint64(block.timestamp));
 
         bool ended = _checkWinners(gameId, g);
         if (!ended && g.drawnOrder.length == MAX_NUMBER) {
@@ -306,7 +307,7 @@ contract Tambola is ITambola {
             host:             g.host,
             ticketPrice:      g.ticketPrice,
             startTime:        g.startTime,
-            lastDrawBlock:    g.lastDrawBlock,
+            lastDrawTime:     g.lastDrawTime,
             maxTickets:       g.maxTickets,
             ticketCount:      g.ticketCount,
             polledMask:       g.polledMask,

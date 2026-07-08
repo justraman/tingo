@@ -19,7 +19,6 @@ import { useDraftStore } from "@/lib/store/draft";
 import { useGameStore } from "@/lib/store/game";
 import { useChatStore } from "@/lib/store/chat";
 
-import { getClient } from "@/lib/chain/client";
 import {
   readGame, readDrawnNumbers, readTickets, readTicketsByOwner, readIsRefundClaimed, readWithdrawable,
   readPrizeBps, type PrizeBps,
@@ -27,7 +26,7 @@ import {
 import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
 import { gridFromMasks } from "@/lib/tambola/encode";
-import { BLOCK_TIME_SECONDS, BLOCKS_BETWEEN_DRAWS, CHAIN } from "@/lib/chain/constants";
+import { DRAW_INTERVAL_SECONDS, CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
 import { hueFromSeed } from "@/lib/ticket-hues";
 import { Coins, Zap } from "lucide-react";
@@ -42,7 +41,6 @@ const STATE_VARIANTS: Record<number, "secondary" | "live" | "success" | "outline
 // How long past due a draw may be before we assume the worker is down and
 // offer the player the permissionless drawNumber poke.
 const WORKER_GRACE_SECONDS = 120;
-const WORKER_GRACE_BLOCKS = BigInt(Math.ceil(WORKER_GRACE_SECONDS / BLOCK_TIME_SECONDS));
 
 export function GameView({ id }: { id: string }) {
   const gameId = BigInt(id);
@@ -54,8 +52,6 @@ export function GameView({ id }: { id: string }) {
   const clearDraft = useDraftStore((s) => s.clear);
 
   const snap = useGameStore((s) => s.byId[gameId.toString()]);
-  const bestBlock = useGameStore((s) => s.bestBlock);
-  const setBestBlock = useGameStore((s) => s.setBestBlock);
   const setGame = useGameStore((s) => s.setGame);
   const appendDrawn = useGameStore((s) => s.appendDrawn);
   const appendLineWinner = useGameStore((s) => s.appendLineWinner);
@@ -135,19 +131,6 @@ export function GameView({ id }: { id: string }) {
     return () => { cancel = true; };
   }, [gameId, selected, snap?.noWinner, refreshTickets]);
 
-  // Subscribe to best-block.
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    (async () => {
-      const client = await getClient();
-      const sub = (client as any).bestBlocks$.subscribe({
-        next: (blocks: any) => { if (blocks[0]) setBestBlock(BigInt(blocks[0].number)); },
-      });
-      unsub = () => sub.unsubscribe();
-    })();
-    return () => { unsub?.(); };
-  }, [setBestBlock]);
-
   // Subscribe to Tambola contract events scoped to this game.
   useEffect(() => {
     let teardown: (() => void) | undefined;
@@ -198,8 +181,8 @@ export function GameView({ id }: { id: string }) {
   // worker misses its slot by WORKER_GRACE, let the player poke instead.
   const startOverdue = game?.state === 0 && game.ticketCount > 0 &&
     nowSec >= Number(game.startTime) + WORKER_GRACE_SECONDS;
-  const drawOverdue = game?.state === 1 && bestBlock > 0n &&
-    bestBlock >= game.lastDrawBlock + BigInt(BLOCKS_BETWEEN_DRAWS) + WORKER_GRACE_BLOCKS;
+  const drawOverdue = game?.state === 1 &&
+    nowSec >= Number(game.lastDrawTime) + DRAW_INTERVAL_SECONDS + WORKER_GRACE_SECONDS;
 
   function beginTx(label: string) {
     setError(""); setSuccess(null); setStatus("signing"); setAction(label); setBusy(true);

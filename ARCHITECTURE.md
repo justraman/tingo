@@ -18,7 +18,8 @@ React SPA that runs **inside a Polkadot host** (Desktop / Mobile / Web) as a san
 "product" and talks to the chain and to host services (wallet signing, in-game chat,
 the chain connection) through **TrUAPI**, the host's capability API. A worker bundled
 with the app registers a chat room per game and pokes the permissionless `drawNumber`
-forward every few blocks.
+forward every `DRAW_INTERVAL_SECONDS` (12 s). All game timing is wall-clock
+(`block.timestamp`) — block numbers play no role in the rules.
 
 ---
 
@@ -141,8 +142,8 @@ uses or could use:
 │  │                                                                                   │   │
 │  │   Vite + React SPA (src/)                       Worker (worker/index.ts)          │   │
 │  │   ─ game list / schedule / live view            ─ chat announcements per game    │   │
-│  │   ─ reads via ReviveApi.call (dry-run)          ─ pokes drawNumber every N blocks│   │
-│  │   ─ writes via Revive.call extrinsic            ─ subscribes best block          │   │
+│  │   ─ reads via ReviveApi.call (dry-run)          ─ pokes drawNumber every 12 s    │   │
+│  │   ─ writes via Revive.call extrinsic            ─ watches contract events        │   │
 │  │   ─ events via Revive.ContractEmitted           ─ posts system chat messages     │   │
 │  │   ─ zustand stores (wallet/draft/game/chat)                                       │   │
 │  └───────────────────────────────────────────────────────────────────────────────┘   │
@@ -175,7 +176,7 @@ external signature, and constant; the frontend ABI derives from it. One contract
 
 ### 4.1 State per game
 
-`Game` packs: `host`, `ticketPrice`, `startTime` (unix seconds), `lastDrawBlock`, `maxTickets`,
+`Game` packs: `host`, `ticketPrice`, `startTime` (unix seconds), `lastDrawTime` (unix seconds), `maxTickets`,
 `ticketCount`, a 90-bit `polledMask` of drawn numbers, the `pot`, a `GameState`
 (`Pending → Live → Won | NoWinner`), the four winner addresses, the ordered
 `drawnOrder[]`, and `tickets[]`. Side mappings: per-game layout-hash dedup
@@ -202,8 +203,8 @@ ticket's 3×9 grid from the row masks (`gridFromMasks` in `encode.ts`).
    down a column, no duplicate numbers; then deduped by `keccak256(layout)`. Emits
    `TicketBought`.
 3. **`drawNumber(gameId)`** — **permissionless**. Anyone (the worker, or any player)
-   can call once `block.timestamp ≥ startTime` and `block.number ≥ lastDrawBlock +
-   BLOCKS_BETWEEN_DRAWS`. Picks an undrawn number via `_nextNumber`, sets the mask,
+   can call once `block.timestamp ≥ startTime` and `block.timestamp ≥ lastDrawTime +
+   DRAW_INTERVAL_SECONDS` (12 s). Picks an undrawn number via `_nextNumber`, sets the mask,
    appends to history, emits `NumberDrawn`, then `_checkWinners`. If all 90 numbers are
    drawn with no full house → `NoWinner` + `GameEndedNoWinner`.
 4. **`claimRefund(gameId)`** — only in `NoWinner`. Each ticket holder claims an equal
@@ -230,8 +231,9 @@ commit-reveal or VRF would harden it for mainnet.
 
 ### 4.5 Tests
 
-`test/Tambola.t.sol` (Foundry, 19 cases): create validation; every `buyTicket` rule +
-dedup; draw gating; single- and multi-line payout; full-house payout for each
+`test/Tambola.t.sol` (Foundry, 21 cases): create validation; every `buyTicket` rule +
+dedup; draw gating (wall-clock only — block numbers must not unlock a draw); single-
+and multi-line payout; full-house payout for each
 unclaimed-line combination (each summing to 100%); withdraw; refund preconditions; and
 a `ReentrantSink` guard test.
 
@@ -268,8 +270,9 @@ configs) because the product sandbox has no `process` at runtime.
 
 ### 6.1 Chain layer (`src/lib/chain/`)
 
-- `constants.ts` — `CHAIN` (name, genesis, rpc, decimals, symbol, blockTime),
-  `TAMBOLA_ADDRESS`, and `READ_ONLY_ORIGIN` (an SS58 used as the dry-run caller).
+- `constants.ts` — `CHAIN` (name, genesis, rpc, decimals, symbol),
+  `TAMBOLA_ADDRESS`, `DRAW_INTERVAL_SECONDS` (mirror of the contract constant), and
+  `READ_ONLY_ORIGIN` (an SS58 used as the dry-run caller).
 - `client.ts` — the PAPI client singleton, host vs standalone provider selection.
 - `signer.ts` — a single `SignerManager` from `@parity/product-sdk-signer`
   (`dappName: "tambola"`) + `ensureSignerConnected()`.
@@ -308,7 +311,7 @@ pallet-revive calls** over PAPI's unsafe API:
   draft (grid + encoded layout) per game. Bought tickets are read from chain and their
   grids reconstructed from the row masks, so they render on any device.
 - `game` — live snapshot per id (game scalars, drawn numbers, line winners, final
-  winner, no-winner flag) + global `bestBlock`.
+  winner, no-winner flag).
 - `chat` — messages + closed flag per game.
 
 ### 6.4 Screens (`src/pages/`, routed by `src/App.tsx`)
@@ -319,8 +322,8 @@ pallet-revive calls** over PAPI's unsafe API:
   `callCreateGame`.
 - `/game/{id}` (`GameView.tsx`) — the live view: countdown, ticket generator/buy,
   number board, winner
-  banner, your-ticket grid, refund + withdraw, and the chat panel. Wires three
-  subscriptions (best block, contract events scoped to this game, chat) and refreshes
+  banner, your-ticket grid, refund + withdraw, and the chat panel. Wires two
+  subscriptions (contract events scoped to this game, chat) and refreshes
   reads on each event.
 
 Components (`src/components/`): `TicketGrid`, `NumberBoard`, `Countdown`,
@@ -337,12 +340,31 @@ is permissionless, so a stalled worker never bricks a game. Two jobs:
 1. **Chat announcements.** On `GameCreated`, publish a welcome statement to the
    `tambola-<id>` room (statement-store topic2); on `GameWon` /
    `GameEndedNoWinner`, publish a closing message.
-2. **Draw poker.** Subscribes `bestBlocks$`; for each active game past `startBlock` and
-   `lastDrawBlock + N`, dry-runs and submits `drawNumber`, guarded by a `pendingTx`
-   flag so it never double-fires while a tx is in flight.
+2. **Draw poker.** Ticks every few seconds; for each active game past `startTime` and
+   `lastDrawTime + DRAW_INTERVAL_SECONDS`, dry-runs and submits `drawNumber`, guarded
+   by a `pendingTx` flag so it never double-fires while a tx is in flight. On startup
+   it scans `nextGameId`/`getGame` so a restarted worker resumes driving live games.
 
 It uses `StatementStoreClient` (host mode), `getHostProvider`, and (see §9) a host
 signer.
+
+### 7.1 The Cloudflare worker (`cloudflare/`)
+
+A second, independent drawNumber poker + indexer that runs outside the Triangle
+sandbox on Cloudflare cron triggers (see `cloudflare/README.md` for setup):
+
+- **Drawer** (`* * * * *`): Cloudflare crons bottom out at one minute, so each
+  invocation loops internally, ticking `drawNumber` at the contract's
+  `DRAW_INTERVAL_SECONDS` cadence (read on-chain) for ~52 s before handing over
+  to the next invocation.
+- **Indexer** (`*/5 * * * *`): snapshots every non-final game (`getGame` +
+  `getDrawnNumbers`) into a **D1** database; `GET /games` serves the index.
+
+It connects with `getWsProvider` (workerd supports the `WebSocket` client
+constructor), reads via the same `ReviveApi.call` dry-run pattern, and signs
+with its own sr25519 key (`SIGNER_MNEMONIC` secret). Racing the host worker is
+safe: the contract enforces the cadence and the loser's dry-run reverts before
+anything is submitted.
 
 ---
 
@@ -353,7 +375,7 @@ Host schedules     → callCreateGame → Revive.call createGame → GameCreated
                                                               → worker announces game in chat
 Player generates   → ticket.ts (crypto RNG) → draft store (localStorage)
 Player buys        → callBuyTicket(value=price) → buyTicket validates+stores bitmaps → TicketBought
-Start block passes → worker/players call drawNumber every N blocks → NumberDrawn (×up to 90)
+Start time passes  → worker/players call drawNumber every 12 s → NumberDrawn (×up to 90)
                        _checkWinners → LineWon (first to complete each row)
 Full house hit     → GameWon (fullhouse + unclaimed lines, + host fee) → state Won → chat closes
    or 90 drawn      → GameEndedNoWinner → players claimRefund
@@ -377,8 +399,10 @@ recorded so they are not rediscovered later.
    `block.timestamp`, so block-time prediction (and the `BLOCK_TIME_SECS` constant) is
    gone. The `Countdown` is wall-clock based; `blockTimeSec` was dropped from
    `constants.ts`.
-3. ~~**`BLOCKS_BETWEEN_DRAWS` drift.**~~ **Resolved.** Worker aligned to the contract
-   constant `5`. (Still a hardcoded copy — read it on-chain when descriptors land.)
+3. ~~**`BLOCKS_BETWEEN_DRAWS` drift.**~~ **Resolved, then superseded (2026-07-08).**
+   Draw cadence is now wall-clock: `DRAW_INTERVAL_SECONDS = 12` gated on
+   `block.timestamp`, mirrored in `src/lib/chain/constants.ts`. (Still a hardcoded
+   copy — read it on-chain when descriptors land.)
 4. ~~**`getHostSigner` does not exist**~~ **Resolved.** The worker now signs via the
    shared `SignerManager` (`@parity/product-sdk-signer`) from `src/lib/chain/signer.ts`
    — `account.getSigner()` yields the `PolkadotSigner`. Needs live-host verification (§9.7).

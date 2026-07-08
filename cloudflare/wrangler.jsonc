@@ -1,0 +1,30 @@
+// Tambola Cloudflare worker — cron-driven draw poker + D1 game indexer.
+//
+// Two cron triggers dispatch inside src/index.ts on `controller.cron`:
+//   "* * * * *"   → drawer: ticks drawNumber every DRAW_INTERVAL_SECONDS (12 s)
+//                   within the minute (Cloudflare crons can't fire sub-minute).
+//   "*/5 * * * *" → indexer: snapshots every game into the D1 database.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "tambola-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["* * * * *", "*/5 * * * *"]
+  },
+  "vars": {
+    "CHAIN_RPC": "wss://paseo-asset-hub-next-rpc.polkadot.io",
+    "TAMBOLA_ADDRESS": "0xb387482bfd8feb559fdd6988dd70574f3ef13531",
+    // Must be a Revive-mapped account: the runtime rejects dry-runs from
+    // unmapped origins. The dev deploy signer is mapped by the deploy itself.
+    "READ_ONLY_ORIGIN": "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tambola-index",
+      "database_id": "06969f79-454f-4fd5-884f-9727ad13506f"
+    }
+  ]
+}

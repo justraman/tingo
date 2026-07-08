@@ -53,7 +53,7 @@ export const TAMBOLA_ABI = [
         { name: "host",             type: "address" },
         { name: "ticketPrice",      type: "uint256" },
         { name: "startTime",        type: "uint64"  },
-        { name: "lastDrawBlock",    type: "uint64"  },
+        { name: "lastDrawTime",     type: "uint64"  },
         { name: "maxTickets",       type: "uint8"   },
         { name: "ticketCount",      type: "uint8"   },
         { name: "polledMask",       type: "uint128" },
@@ -141,6 +141,10 @@ export const TAMBOLA_ABI = [
     type: "function", name: "HOST_BPS", stateMutability: "view",
     inputs: [], outputs: [{ type: "uint16" }],
   },
+  {
+    type: "function", name: "DRAW_INTERVAL_SECONDS", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint16" }],
+  },
 
   // ---- events ----
   {
@@ -164,9 +168,9 @@ export const TAMBOLA_ABI = [
   {
     type: "event", name: "NumberDrawn", anonymous: false,
     inputs: [
-      { name: "gameId",      type: "uint256", indexed: true  },
-      { name: "number",      type: "uint8",   indexed: false },
-      { name: "blockNumber", type: "uint64",  indexed: false },
+      { name: "gameId",  type: "uint256", indexed: true  },
+      { name: "number",  type: "uint8",   indexed: false },
+      { name: "drawnAt", type: "uint64",  indexed: false },
     ],
   },
   {
@@ -209,7 +213,7 @@ export interface GameView {
   host: `0x${string}`;
   ticketPrice: bigint;
   startTime: bigint;
-  lastDrawBlock: bigint;
+  lastDrawTime: bigint;
   maxTickets: number;
   ticketCount: number;
   polledMask: bigint;

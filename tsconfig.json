@@ -19,5 +19,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "out", "artifacts", "cache"]
+  "exclude": ["node_modules", "out", "artifacts", "cache", "cloudflare"]
 }

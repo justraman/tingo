@@ -93,7 +93,7 @@ export function NewGamePage() {
         <CardHeader>
           <CardTitle>Schedule a Tambola game</CardTitle>
           <CardDescription>
-            The contract computes the start block from the time you pick. Players can buy tickets until then.
+            The game starts at the time you pick. Players can buy tickets until then.
             Game ends when someone hits a full house.
           </CardDescription>
         </CardHeader>
@@ -110,7 +110,7 @@ export function NewGamePage() {
             <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Prize split</div>
             <PrizeSplitBar />
             <div className="text-xs text-muted-foreground">
-              Max 100 players. Numbers are drawn every ~24 s after start. Unclaimed line shares roll into the full house.
+              Max 100 players. Numbers are drawn every 12 s after start. Unclaimed line shares roll into the full house.
             </div>
           </div>
         </CardContent>

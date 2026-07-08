@@ -12,8 +12,6 @@ interface GameSnapshot {
 
 interface GameState {
   byId: Record<string, GameSnapshot>;
-  bestBlock: bigint;
-  setBestBlock: (n: bigint) => void;
   setGame: (id: bigint, snap: Partial<GameSnapshot>) => void;
   appendDrawn: (id: bigint, n: number) => void;
   appendLineWinner: (id: bigint, w: { line: number; winner: `0x${string}`; payout: bigint }) => void;
@@ -24,8 +22,6 @@ interface GameState {
 
 export const useGameStore = create<GameState>((set) => ({
   byId: {},
-  bestBlock: 0n,
-  setBestBlock: (bestBlock) => set({ bestBlock }),
   setGame: (id, patch) => set((s) => {
     const key = id.toString();
     const prev = s.byId[key] ?? { drawn: [], tickets: [], lineWinners: [], noWinner: false };

@@ -15,7 +15,7 @@ import { TAMBOLA_ABI } from "./abi";
 export type TambolaEvent =
   | { name: "GameCreated";       args: { gameId: bigint; host: `0x${string}`; startTime: bigint; ticketPrice: bigint } }
   | { name: "TicketBought";      args: { gameId: bigint; player: `0x${string}`; ticketId: bigint; hash: `0x${string}` } }
-  | { name: "NumberDrawn";       args: { gameId: bigint; number: number; blockNumber: bigint } }
+  | { name: "NumberDrawn";       args: { gameId: bigint; number: number; drawnAt: bigint } }
   | { name: "LineWon";           args: { gameId: bigint; line: number; winner: `0x${string}`; payout: bigint } }
   | { name: "GameWon";           args: { gameId: bigint; winner: `0x${string}`; payout: bigint; host: `0x${string}`; hostFee: bigint } }
   | { name: "GameEndedNoWinner"; args: { gameId: bigint } }

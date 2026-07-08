@@ -27,7 +27,7 @@ interface ITambola {
         address host;
         uint256 ticketPrice;
         uint64  startTime;
-        uint64  lastDrawBlock;
+        uint64  lastDrawTime;
         uint8   maxTickets;
         uint8   ticketCount;
         uint128 polledMask;
@@ -46,7 +46,7 @@ interface ITambola {
 
     event GameCreated(uint256 indexed gameId, address indexed host, uint64 startTime, uint256 ticketPrice);
     event TicketBought(uint256 indexed gameId, address indexed player, uint256 ticketId, bytes32 hash);
-    event NumberDrawn(uint256 indexed gameId, uint8 number, uint64 blockNumber);
+    event NumberDrawn(uint256 indexed gameId, uint8 number, uint64 drawnAt);
     /// `line` ∈ {0: top, 1: middle, 2: bottom}.
     event LineWon(uint256 indexed gameId, uint8 line, address indexed winner, uint256 payout);
     event GameWon(uint256 indexed gameId, address indexed winner, uint256 payout, address host, uint256 hostFee);
@@ -70,7 +70,7 @@ interface ITambola {
 
     /// Draw the next number. Permissionless: anyone can call once
     /// `block.timestamp >= startTime` AND
-    /// `block.number >= lastDrawBlock + BLOCKS_BETWEEN_DRAWS`.
+    /// `block.timestamp >= lastDrawTime + DRAW_INTERVAL_SECONDS`.
     function drawNumber(uint256 gameId) external;
 
     /// Claim the refund share for all of `msg.sender`'s tickets once a game
@@ -101,10 +101,10 @@ interface ITambola {
     //  Constants
     // ---------------------------------------------------------------------
 
-    function BLOCKS_BETWEEN_DRAWS() external view returns (uint8);
-    function MAX_TICKETS()          external view returns (uint8);
-    function FULLHOUSE_BPS()        external view returns (uint16);
-    function LINE_BPS()             external view returns (uint16);
-    function HOST_BPS()             external view returns (uint16);
-    function MAX_NUMBER()           external view returns (uint8);
+    function DRAW_INTERVAL_SECONDS() external view returns (uint16);
+    function MAX_TICKETS()           external view returns (uint8);
+    function FULLHOUSE_BPS()         external view returns (uint16);
+    function LINE_BPS()              external view returns (uint16);
+    function HOST_BPS()              external view returns (uint16);
+    function MAX_NUMBER()            external view returns (uint8);
 }

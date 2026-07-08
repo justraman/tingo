@@ -11,7 +11,7 @@ import {ITambola} from "../contracts/ITambola.sol";
 ///   - createGame: bad timestamp / zero price / startTime storage
 ///   - buyTicket:  layout validation (15 cells, 5/row, column ranges, monotone column, no dup),
 ///                 hash dedup, wrong price, multi-ticket per player, post-start rejection
-///   - drawNumber: gating by startTime + BLOCKS_BETWEEN_DRAWS, end-state transitions
+///   - drawNumber: gating by startTime + DRAW_INTERVAL_SECONDS, end-state transitions
 ///   - payouts:    line wins credit withdrawable; full-house credits winner + host;
 ///                 unclaimed lines roll into full-house share; sum stays ≤ pot
 ///   - withdraw:   pulls credited balance, reentrancy guard
@@ -27,9 +27,7 @@ contract TambolaTest is Test {
     uint256 constant TICKET_PRICE = 1 ether;
 
     function setUp() public {
-        // Roll forward far enough that the BLOCKS_BETWEEN_DRAWS guard
-        // (`block.number >= lastDrawBlock + 5`) is satisfied on the very first
-        // draw — `lastDrawBlock` starts at 0, so we need block.number ≥ 5.
+        // `_nextNumber` reads blockhash(block.number - 1), so we need a parent block.
         vm.roll(1_000);
         vm.warp(1_700_000_000);
         tambola = new Tambola();
@@ -82,8 +80,8 @@ contract TambolaTest is Test {
         vm.warp(g.startTime);
     }
 
-    function _advanceBlocks(uint256 n) internal {
-        vm.roll(block.number + n);
+    function _advanceSeconds(uint256 n) internal {
+        vm.warp(block.timestamp + n);
     }
 
     // =========================================================
@@ -258,8 +256,24 @@ contract TambolaTest is Test {
         vm.expectRevert(bytes("too soon"));
         tambola.drawNumber(gid);              // immediate retry fails
 
-        _advanceBlocks(tambola.BLOCKS_BETWEEN_DRAWS());
+        _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
         tambola.drawNumber(gid);              // gap elapsed → OK
+    }
+
+    /// The gap is wall-clock only — piling on blocks without time passing
+    /// must not unlock the next draw.
+    function test_drawNumber_gapIgnoresBlockNumber() public {
+        uint256 gid = _createGame(4);
+        _buy(gid, alice, _layoutA());
+        _advanceToStart(gid);
+
+        tambola.drawNumber(gid);
+        vm.roll(block.number + 1_000);
+        vm.expectRevert(bytes("too soon"));
+        tambola.drawNumber(gid);
+
+        _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
+        tambola.drawNumber(gid);
     }
 
     function test_drawNumber_rejectsWithNoTickets() public {
@@ -290,7 +304,7 @@ contract TambolaTest is Test {
             ITambola.GameView memory g = tambola.getGame(gid);
             if (g.state == ITambola.GameState.Won || g.state == ITambola.GameState.NoWinner) break;
             tambola.drawNumber(gid);
-            _advanceBlocks(tambola.BLOCKS_BETWEEN_DRAWS());
+            _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
         }
 
         ITambola.GameView memory gv = tambola.getGame(gid);
@@ -354,7 +368,7 @@ contract TambolaTest is Test {
             ITambola.GameView memory g = tambola.getGame(gid);
             if (g.state == ITambola.GameState.Won || g.state == ITambola.GameState.NoWinner) break;
             tambola.drawNumber(gid);
-            _advanceBlocks(tambola.BLOCKS_BETWEEN_DRAWS());
+            _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
         }
         // Sink has 5% credited; sink.attack triggers nested withdraw.
         assertGt(tambola.withdrawable(address(sink)), 0);
