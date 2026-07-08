@@ -15,6 +15,9 @@
   },
   "vars": {
     "CHAIN_RPC": "wss://paseo-asset-hub-next-rpc.polkadot.io",
+    // People chain node exposing the statement_* RPC — chat announcements
+    // publish here in local mode (no host).
+    "STATEMENT_RPC": "wss://paseo-people-next-system-rpc.polkadot.io",
     "TAMBOLA_ADDRESS": "0xb387482bfd8feb559fdd6988dd70574f3ef13531",
     // Must be a Revive-mapped account: the runtime rejects dry-runs from
     // unmapped origins. The dev deploy signer is mapped by the deploy itself.

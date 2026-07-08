@@ -9,7 +9,8 @@ On-chain Tambola (Indian Bingo). A Solidity contract on Asset Hub (pallet-revive
 PolkaVM) is the referee — it owns the pot, validates tickets, draws numbers, and pays
 out. The UI is a static Vite + React SPA "product" that runs inside a Polkadot host
 (Desktop / Mobile / Web) and reaches the chain + host services through **TrUAPI** via
-`@parity/product-sdk-host`. A bundled worker drives draws and chat.
+`@parity/product-sdk-host`. A Cloudflare cron worker (`cloudflare/`) drives draws,
+chat announcements, and a D1 game index.
 
 ## How to write code here
 
@@ -111,8 +112,7 @@ bun run cf:typecheck && bun run cf:deploy
 - **`resolc 0.6.0` is seeded** at `~/.rvm/0.6.0/` (the 180 MB auto-download is flaky in
   the sandbox). On a fresh machine, recreate the seed or allow the download.
 - **Outputs collide by default.** Foundry writes `forge-out/`; Vite writes `out/`
-  (app) and `out/worker/`. Keep `foundry.toml`'s `out = "forge-out"`, and keep the
-  app→worker build order (`bun run build`) — the app build empties `out/` first.
+  (app). Keep `foundry.toml`'s `out = "forge-out"`.
 
 ## Open issues to respect (details in ARCHITECTURE.md §9)
 

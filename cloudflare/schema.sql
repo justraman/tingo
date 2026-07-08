@@ -19,3 +19,12 @@ CREATE TABLE IF NOT EXISTS games (
 );
 
 CREATE INDEX IF NOT EXISTS idx_games_state ON games (state);
+
+-- Chat milestones already published to a game's statement-store room, so a
+-- cron invocation announces each one exactly once.
+CREATE TABLE IF NOT EXISTS announcements (
+  game_id      INTEGER NOT NULL,
+  kind         TEXT    NOT NULL,   -- welcome | won | no-winner
+  announced_at INTEGER NOT NULL,   -- unix seconds
+  PRIMARY KEY (game_id, kind)
+);

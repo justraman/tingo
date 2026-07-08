@@ -1,12 +1,12 @@
 /**
  * bulletin-deploy / playground-cli config.
  *
- * Two executables get bundled:
- *   - app    : the static Vite SPA build at `./out`
- *   - worker : the Vite-built worker script at `./out/worker` (chat + draw poker)
+ * One executable gets bundled: the static Vite SPA build at `./out`.
+ * Draw poking, chat announcements, and indexing run in the Cloudflare worker
+ * (`cloudflare/`), deployed separately via `bun run cf:deploy`.
  *
- * `playground deploy --signer dev --env paseo-next-v2` reads this file and
- * uploads everything to the Bulletin Chain + registers the DotNS domain.
+ * `playground deploy --signer dev` reads this file and uploads everything to
+ * the Bulletin Chain + registers the DotNS domain.
  */
 export default {
   domain:      process.env.MANIFEST_DOMAIN ?? "tambola-game.dot",
@@ -17,13 +17,6 @@ export default {
       kind: "app" as const,
       path: "./out",
       appVersion: [0, 1, 0] as [number, number, number],
-    },
-    {
-      kind: "worker" as const,
-      path: "./out/worker",
-      appVersion: [0, 1, 0] as [number, number, number],
-      entrypoint: "index.js",
-      includes: { chat: true, pocket: false },
     },
   ],
 };

@@ -16,10 +16,11 @@ numbers with on-chain randomness, awards line and full-house prizes, and pays ou
 no backend, no trusted RNG server, no custodial wallet. The UI is a static Vite +
 React SPA that runs **inside a Polkadot host** (Desktop / Mobile / Web) as a sandboxed
 "product" and talks to the chain and to host services (wallet signing, in-game chat,
-the chain connection) through **TrUAPI**, the host's capability API. A worker bundled
-with the app registers a chat room per game and pokes the permissionless `drawNumber`
-forward every `DRAW_INTERVAL_SECONDS` (12 s). All game timing is wall-clock
-(`block.timestamp`) — block numbers play no role in the rules.
+the chain connection) through **TrUAPI**, the host's capability API. A Cloudflare
+cron worker (`cloudflare/`) announces game milestones in each game's chat room and
+pokes the permissionless `drawNumber` forward every `DRAW_INTERVAL_SECONDS` (12 s).
+All game timing is wall-clock (`block.timestamp`) — block numbers play no role in
+the rules.
 
 ---
 
@@ -123,9 +124,9 @@ uses or could use:
 > **Naming note.** `@parity/product-sdk-host` is the *successor packaging* of the same
 > host protocol that TrUAPI formalizes. The truapi repo is the canonical method/type
 > reference; product-sdk-host is the client we actually import. Treat them as two views
-> of one surface. Where the worker imports `getHostSigner` (see §9) that symbol is
-> **not** in the installed SDK — signing must go through `getAccountsProvider` /
-> `getTruApi().signing` / `@parity/product-sdk-signer` instead.
+> of one surface. Note `getHostSigner` (see §9) does **not** exist in the installed
+> SDK — signing must go through `getAccountsProvider` / `getTruApi().signing` /
+> `@parity/product-sdk-signer` instead.
 
 ---
 
@@ -140,12 +141,10 @@ uses or could use:
 │     │                                                                                   │
 │  ┌──┴───────────────── Product sandbox (our code) ─────────────────────────────────┐   │
 │  │                                                                                   │   │
-│  │   Vite + React SPA (src/)                       Worker (worker/index.ts)          │   │
-│  │   ─ game list / schedule / live view            ─ chat announcements per game    │   │
-│  │   ─ reads via ReviveApi.call (dry-run)          ─ pokes drawNumber every 12 s    │   │
-│  │   ─ writes via Revive.call extrinsic            ─ watches contract events        │   │
-│  │   ─ events via Revive.ContractEmitted           ─ posts system chat messages     │   │
-│  │   ─ zustand stores (wallet/draft/game/chat)                                       │   │
+│  │   Vite + React SPA (src/)                                                         │   │
+│  │   ─ game list / schedule / live view                                              │   │
+│  │   ─ reads via ReviveApi.call (dry-run) · writes via Revive.call extrinsic         │   │
+│  │   ─ events via Revive.ContractEmitted · zustand stores (wallet/draft/game/chat)   │   │
 │  └───────────────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                                         │  PAPI (WebSocket JSON-RPC)
@@ -153,6 +152,12 @@ uses or could use:
                  ┌──────────────────────────────────────────────────┐
                  │   Asset Hub (paseo-next-v2)  ·  pallet-revive      │
                  │   Tambola.sol (PolkaVM)  — owns pot, rules, RNG    │
+                 └──────────────────────────────────────────────────┘
+                                        ▲
+                                        │  PAPI (WebSocket) + statement store (Bulletin)
+                 ┌──────────────────────┴───────────────────────────┐
+                 │   Cloudflare worker (cloudflare/) — cron-driven    │
+                 │   drawNumber poker · chat announcer · D1 indexer   │
                  └──────────────────────────────────────────────────┘
 ```
 
@@ -250,11 +255,12 @@ a `ReentrantSink` guard test.
   Deployment Manager recognize the package.
 - **Deploy contract:** `playground contract deploy --signer dev --env paseo-next-v2`
   → prints an H160; write it into `.env.local` as `NEXT_PUBLIC_TAMBOLA_ADDRESS`.
-- **Deploy app + worker:** `playground deploy` reads `bulletin-deploy.config.ts` (two
-  executables: the static `./out` app, and the Vite-built worker at `./out/worker` with
-  `includes.chat: true`), uploads to the **Bulletin Chain / IPFS**, and registers a
-  **DotNS** domain (`tambola-game.dot`). Replace `public/icon.png.placeholder` with a
-  real 256×256 PNG first.
+- **Deploy app:** `playground deploy` reads `bulletin-deploy.config.ts` (one
+  executable: the static `./out` app), uploads to the **Bulletin Chain / IPFS**, and
+  registers a **DotNS** domain (`tambola-game.dot`). Replace
+  `public/icon.png.placeholder` with a real 256×256 PNG first.
+- **Deploy the Cloudflare worker** separately: `bun run cf:deploy` (see
+  `cloudflare/README.md`).
 
 ---
 
@@ -331,40 +337,38 @@ Components (`src/components/`): `TicketGrid`, `NumberBoard`, `Countdown`,
 
 ---
 
-## 7. The worker (`worker/index.ts`)
+## 7. The Cloudflare worker (`cloudflare/`)
 
-A separate executable, Vite-built to `./out/worker`, running in the host's worker
-sandbox (`includes.chat: true`). It is a **convenience, not a trust anchor** — the draw
-is permissionless, so a stalled worker never bricks a game. Two jobs:
-
-1. **Chat announcements.** On `GameCreated`, publish a welcome statement to the
-   `tambola-<id>` room (statement-store topic2); on `GameWon` /
-   `GameEndedNoWinner`, publish a closing message.
-2. **Draw poker.** Ticks every few seconds; for each active game past `startTime` and
-   `lastDrawTime + DRAW_INTERVAL_SECONDS`, dry-runs and submits `drawNumber`, guarded
-   by a `pendingTx` flag so it never double-fires while a tx is in flight. On startup
-   it scans `nextGameId`/`getGame` so a restarted worker resumes driving live games.
-
-It uses `StatementStoreClient` (host mode), `getHostProvider`, and (see §9) a host
-signer.
-
-### 7.1 The Cloudflare worker (`cloudflare/`)
-
-A second, independent drawNumber poker + indexer that runs outside the Triangle
-sandbox on Cloudflare cron triggers (see `cloudflare/README.md` for setup):
+Runs outside the Triangle sandbox on Cloudflare cron triggers (see
+`cloudflare/README.md` for setup). It is a **convenience, not a trust anchor** —
+the draw is permissionless, so a stalled worker never bricks a game; any player
+can poke `drawNumber` from the browser. Three jobs:
 
 - **Drawer** (`* * * * *`): Cloudflare crons bottom out at one minute, so each
   invocation loops internally, ticking `drawNumber` at the contract's
   `DRAW_INTERVAL_SECONDS` cadence (read on-chain) for ~52 s before handing over
-  to the next invocation.
+  to the next invocation. Gates on **chain time** (`Timestamp.Now` at best) —
+  the testnet's `block.timestamp` can lag wall clock by many seconds.
+- **Chat announcements** (same cron): publishes welcome / full-house /
+  no-winner messages to each game's `tambola-<id>` statement-store room.
+  Publishes directly to the People chain's `statement_*` RPC
+  (`wss://paseo-people-next-system-rpc.polkadot.io`) via
+  `@novasamatech/statement-store` — no host needed. Topic hashing (blake2b)
+  and JSON payloads are byte-identical to the host-mode SDK the app
+  subscribes with (verified). Milestones are detected by diffing chain state
+  against the D1 `announcements` table (≤1 min lag); failed publishes stay
+  unmarked and retry. **Prerequisite:** the signer account needs a
+  statement-store allowance on the People chain — an on-chain permission
+  granted via personhood registration or the network operator (see
+  `cloudflare/README.md`).
 - **Indexer** (`*/5 * * * *`): snapshots every non-final game (`getGame` +
   `getDrawnNumbers`) into a **D1** database; `GET /games` serves the index.
 
 It connects with `getWsProvider` (workerd supports the `WebSocket` client
 constructor), reads via the same `ReviveApi.call` dry-run pattern, and signs
-with its own sr25519 key (`SIGNER_MNEMONIC` secret). Racing the host worker is
-safe: the contract enforces the cadence and the loser's dry-run reverts before
-anything is submitted.
+both transactions and statements with its own sr25519 key (`SIGNER_MNEMONIC`
+secret). Racing a player's manual poke is safe: the contract enforces the
+cadence and the loser's dry-run reverts before anything is submitted.
 
 ---
 
@@ -403,9 +407,9 @@ recorded so they are not rediscovered later.
    Draw cadence is now wall-clock: `DRAW_INTERVAL_SECONDS = 12` gated on
    `block.timestamp`, mirrored in `src/lib/chain/constants.ts`. (Still a hardcoded
    copy — read it on-chain when descriptors land.)
-4. ~~**`getHostSigner` does not exist**~~ **Resolved.** The worker now signs via the
-   shared `SignerManager` (`@parity/product-sdk-signer`) from `src/lib/chain/signer.ts`
-   — `account.getSigner()` yields the `PolkadotSigner`. Needs live-host verification (§9.7).
+4. ~~**`getHostSigner` does not exist**~~ **Superseded (2026-07-08).** The bundled
+   host worker was removed entirely; the Cloudflare worker signs transactions and
+   statements with its own sr25519 key (`SIGNER_MNEMONIC` secret).
 5. ~~**Not yet deployed.**~~ **Resolved (2026-07-06).** Live at
    `0xfea8d62be71219653740fd70fbf74fc0f3a2641b` (`.env.local`), descriptors generated
    (`.papi/`). Two runtime gotchas surfaced and fixed: PAPI v2 wants `H160` values as
@@ -431,6 +435,6 @@ recorded so they are not rediscovered later.
   API.
 - **PAPI** — `polkadot-api`, the typed JSON-RPC client used for all chain interaction.
 - **Bulletin Chain / DotNS** — content-addressed storage + naming used to deploy the
-  static app and worker.
+  static app; also hosts the statement store the chat rides on.
 - **Pull payment** — winners' funds are credited to a ledger and withdrawn on demand,
   so one malicious recipient cannot freeze the game.

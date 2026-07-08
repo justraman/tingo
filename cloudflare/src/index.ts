@@ -7,7 +7,11 @@
  *                              single invocation ticks `drawNumber` at the
  *                              contract's DRAW_INTERVAL_SECONDS cadence until
  *                              ~52 s in, then exits and lets the next
- *                              invocation take over.
+ *                              invocation take over. Also announces game
+ *                              milestones (welcome / won / no winner) to each
+ *                              game's statement-store chat room, connecting in
+ *                              local mode (no host needed) and deduping via
+ *                              the D1 `announcements` table.
  *   every 5 minutes (indexer) — snapshots every non-final game into D1.
  *
  * `drawNumber` is permissionless and the contract enforces the cadence, so
@@ -20,14 +24,24 @@ import { getWsProvider } from "polkadot-api/ws";
 import { getPolkadotSigner, type PolkadotSigner } from "polkadot-api/signer";
 import { sr25519CreateDerive } from "@polkadot-labs/hdkd";
 import { DEV_PHRASE, entropyToMiniSecret, mnemonicToEntropy, ss58Address } from "@polkadot-labs/hdkd-helpers";
-import { bytesToHex, encodeFunctionData, decodeFunctionResult, type Abi } from "viem";
+import { bytesToHex, encodeFunctionData, decodeFunctionResult, decodeErrorResult, type Abi } from "viem";
 import { ss58ToH160 } from "@parity/product-sdk-address";
+import { encodeData } from "@parity/product-sdk-statement-store";
+import {
+  createLazyClient,
+  createPapiStatementStoreAdapter,
+  createSr25519Prover,
+  createSr25519Secret,
+} from "@novasamatech/statement-store";
+import { stringToTopic, createExpiryFromDuration } from "@novasamatech/sdk-statement";
 
 import { TAMBOLA_ABI, type GameView } from "../../src/lib/tambola/abi";
+import { CHAT_APP_NAME, CHAT_TTL_SECONDS, roomIdForGame, type ChatPayload } from "../../src/lib/chat/protocol";
 
 interface Env {
   DB: D1Database;
   CHAIN_RPC: string;
+  STATEMENT_RPC: string;
   TAMBOLA_ADDRESS: `0x${string}`;
   READ_ONLY_ORIGIN: string;
   SIGNER_MNEMONIC?: string;
@@ -42,6 +56,22 @@ const FALLBACK_DRAW_INTERVAL = 12n;
 
 const nowSeconds = () => BigInt(Math.floor(Date.now() / 1000));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// The contract judges everything by block.timestamp, which can lag wall clock
+// by many seconds on this testnet — gating draws on Date.now() causes
+// "not started" / "too soon" reverts. Always compare against chain time.
+const chainNowSeconds = async (unsafe: any): Promise<bigint> =>
+  BigInt(await unsafe.query.Timestamp.Now.getValue({ at: "best" })) / 1000n;
+
+const revertReason = (raw: any): string => {
+  try {
+    const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
+    const err = decodeErrorResult({ abi: TAMBOLA_ABI as Abi, data });
+    return `${err.errorName}(${(err.args ?? []).join(", ")})`;
+  } catch {
+    return "unknown reason";
+  }
+};
 
 function connect(env: Env) {
   const client = createClient(getWsProvider(env.CHAIN_RPC));
@@ -81,6 +111,65 @@ async function readAllGames(unsafe: any, env: Env): Promise<Array<GameView & { i
   return games;
 }
 
+// ---- chat announcements -----------------------------------------------------
+
+// A cron worker can't hold a live event subscription, so milestones are
+// detected by diffing chain state against the D1 `announcements` table each
+// drawer run (≤1 min lag). Statements are published directly to the People
+// chain statement-store RPC (no host needed); topic and payload encoding match
+// the host-mode SDK the app subscribes with (blake2b topics, JSON data).
+// Announcements are a nicety: a failed publish (e.g. the account still lacks
+// its statement allowance) is logged, left unmarked, and retried next
+// invocation — never allowed to stall the draws.
+async function announceMilestones(env: Env, games: Array<GameView & { id: bigint }>) {
+  const done = new Set(
+    (await env.DB.prepare("SELECT game_id, kind FROM announcements").all<{ game_id: number; kind: string }>())
+      .results.map((r) => `${r.game_id}:${r.kind}`),
+  );
+
+  const pending: Array<{ id: bigint; kind: string; text: string }> = [];
+  for (const g of games) {
+    // Don't welcome games that were already over before we ever saw them.
+    if (g.state <= 1 && !done.has(`${g.id}:welcome`))
+      pending.push({ id: g.id, kind: "welcome", text: `Welcome to Tambola #${g.id}. Good luck! 🎯` });
+    if (g.state === 2 && !done.has(`${g.id}:won`))
+      pending.push({ id: g.id, kind: "won", text: "🏆 Full house! Game over." });
+    if (g.state === 3 && !done.has(`${g.id}:no-winner`))
+      pending.push({ id: g.id, kind: "no-winner", text: "Game ended without a full house — refunds available." });
+  }
+  if (pending.length === 0) return;
+
+  const lazyClient = createLazyClient(getWsProvider(env.STATEMENT_RPC));
+  const adapter = createPapiStatementStoreAdapter(lazyClient);
+  const secret = createSr25519Secret(mnemonicToEntropy(env.SIGNER_MNEMONIC ?? DEV_PHRASE), env.SIGNER_DERIVATION ?? "");
+  const prover = createSr25519Prover(secret);
+
+  try {
+    for (const p of pending) {
+      try {
+        const payload: ChatPayload = { text: p.text, name: "Tambola" };
+        const signed = await prover.generateMessageProof({
+          topics: [stringToTopic(CHAT_APP_NAME), stringToTopic(roomIdForGame(p.id))],
+          data: encodeData(payload),
+          expiry: createExpiryFromDuration(CHAT_TTL_SECONDS),
+        });
+        if (signed.isErr()) throw signed.error;
+        const submitted = await adapter.submitStatement(signed._unsafeUnwrap());
+        if (submitted.isErr()) throw submitted.error;
+        await env.DB
+          .prepare("INSERT OR IGNORE INTO announcements (game_id, kind, announced_at) VALUES (?1, ?2, ?3)")
+          .bind(Number(p.id), p.kind, Number(nowSeconds()))
+          .run();
+        console.log(`announced ${p.kind} for game ${p.id}`);
+      } catch (e) {
+        console.warn(`announce failed for game ${p.id} (${p.kind}):`, e);
+      }
+    }
+  } finally {
+    lazyClient.disconnect();
+  }
+}
+
 // ---- drawer ---------------------------------------------------------------
 
 async function submitDraw(unsafe: any, env: Env, signer: PolkadotSigner, signerAddress: string, gameId: bigint) {
@@ -94,9 +183,10 @@ async function submitDraw(unsafe: any, env: Env, signer: PolkadotSigner, signerA
 
   const dryRun = await unsafe.apis.ReviveApi.call(
     isMapped ? signerAddress : env.READ_ONLY_ORIGIN, dest, 0n, undefined, undefined, data,
+    { at: "best" },
   );
   if (!dryRun.result.success) throw new Error("draw dry-run failed");
-  if (dryRun.result.value.flags & 1) throw new Error("draw reverted");
+  if (dryRun.result.value.flags & 1) throw new Error(`draw reverted: ${revertReason(dryRun.result.value.data)}`);
 
   const reviveCall = unsafe.tx.Revive.call({
     dest,
@@ -137,26 +227,29 @@ async function runDrawer(env: Env, startedAtMs: number) {
       .then(BigInt)
       .catch(() => FALLBACK_DRAW_INTERVAL);
 
-    const candidates = (await readAllGames(unsafe, env))
-      .filter((g) => (g.state === 0 || g.state === 1) && g.ticketCount > 0);
+    const games = await readAllGames(unsafe, env);
+    await announceMilestones(env, games);
+
+    const candidates = games.filter((g) => (g.state === 0 || g.state === 1) && g.ticketCount > 0);
     if (candidates.length === 0) return;
 
     const lastDraw = new Map(candidates.map((g) => [g.id, g.lastDrawTime]));
     const deadline = startedAtMs + DRAWER_BUDGET_MS;
 
     while (Date.now() < deadline) {
+      const chainNow = await chainNowSeconds(unsafe);
       for (const g of candidates) {
-        const now = nowSeconds();
-        if (now < g.startTime) continue;
-        if (now < (lastDraw.get(g.id) ?? 0n) + interval) continue;
+        if (chainNow < g.startTime) continue;
+        if (chainNow < (lastDraw.get(g.id) ?? 0n) + interval) continue;
         try {
           await submitDraw(unsafe, env, signer, address, g.id);
           console.log(`drew for game ${g.id} as ${address}`);
         } catch (e) {
           console.error(`draw failed for game ${g.id}:`, e);
         }
-        // Success or failure, wait a full interval before this game's next try.
-        lastDraw.set(g.id, nowSeconds());
+        // Success or failure, wait a full interval before this game's next
+        // try — re-read chain time so the inclusion block's timestamp counts.
+        lastDraw.set(g.id, await chainNowSeconds(unsafe));
       }
       await sleep(1_000);
     }

@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && npm run build:worker",
-    "build:worker": "vite build --config worker/vite.config.ts",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "papi:install": "papi",
     "papi:add": "papi add paseo_asset_hub -w wss://paseo-asset-hub-next-rpc.polkadot.io",
@@ -19,6 +18,8 @@
     "deploy:app": "npm run build && playground deploy --signer dev --domain tambola-game --buildDir ./out --no-build --playground"
   },
   "dependencies": {
+    "@novasamatech/sdk-statement": "^0.6.0",
+    "@novasamatech/statement-store": "^0.8.10",
     "@parity/product-sdk-address": "^0.1.1",
     "@parity/product-sdk-chain-client": "^0.7.7",
     "@parity/product-sdk-host": "^0.12.0",

@@ -47,26 +47,36 @@ export async function subscribeEvents(handler: (e: TambolaEvent) => void): Promi
   const toHexString = (v: any): `0x${string}` =>
     typeof v === "string" ? (v as `0x${string}`) : v?.asHex?.() ?? bytesToHex(v);
 
-  const sub = unsafe.event.Revive.ContractEmitted.watch().subscribe({
-    next: (ev: any) => {
-      const contract = toHexString(ev.payload?.contract ?? "0x").toLowerCase();
-      if (contract !== TAMBOLA_ADDRESS.toLowerCase()) return;
-      const data = toHexString(ev.payload.data);
-      const topics = (ev.payload.topics ?? []).map(toHexString) as [
-        signature: `0x${string}`,
-        ...args: `0x${string}`[],
-      ];
-      try {
-        const decoded = decodeEventLog({ abi: TAMBOLA_ABI as Abi, data, topics }) as unknown as {
-          eventName: string;
-          args: Record<string, unknown>;
-        };
-        handler({
-          name: decoded.eventName,
-          args: weiArgsToPlanck(decoded.eventName, decoded.args),
-        } as unknown as TambolaEvent);
-      } catch { /* not one of ours or malformed */ }
+  // watchBest emits `{ type, block, events }` per block — one emission holds
+  // ALL matching events of that block as `{ original, payload }` entries.
+  // "new" best-block events keep the UI as live as the app's `at: "best"`
+  // reads; a reorg can theoretically drop one, which we accept like any read
+  // at "best" ("finalized"/"drop" emissions would double- or un-apply, so
+  // they are skipped).
+  const sub = unsafe.event.Revive.ContractEmitted.watchBest().subscribe({
+    next: (emission: any) => {
+      if (emission?.type !== "new") return;
+      for (const { payload } of emission.events ?? []) {
+        const contract = toHexString(payload?.contract ?? "0x").toLowerCase();
+        if (contract !== TAMBOLA_ADDRESS.toLowerCase()) continue;
+        const data = toHexString(payload.data);
+        const topics = (payload.topics ?? []).map(toHexString) as [
+          signature: `0x${string}`,
+          ...args: `0x${string}`[],
+        ];
+        try {
+          const decoded = decodeEventLog({ abi: TAMBOLA_ABI as Abi, data, topics }) as unknown as {
+            eventName: string;
+            args: Record<string, unknown>;
+          };
+          handler({
+            name: decoded.eventName,
+            args: weiArgsToPlanck(decoded.eventName, decoded.args),
+          } as unknown as TambolaEvent);
+        } catch { /* not one of ours or malformed */ }
+      }
     },
+    error: (e: unknown) => console.error("Tambola event subscription died:", e),
   });
   return () => sub.unsubscribe();
 }
