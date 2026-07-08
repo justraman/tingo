@@ -26,8 +26,8 @@ export function WalletStatus() {
         className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-xl transition-colors hover:bg-white/[0.1]"
       >
         {copied
-          ? <Check className="h-3.5 w-3.5 text-emerald-400" />
-          : <Wallet className="h-3.5 w-3.5 text-emerald-400" />}
+          ? <Check className="h-3.5 w-3.5 text-[hsl(162_40%_58%)]" />
+          : <Wallet className="h-3.5 w-3.5 text-[hsl(162_40%_58%)]" />}
         <span className="font-mono">{copied ? "Copied" : shortenAddress(address, 8, 6)}</span>
       </button>
     );

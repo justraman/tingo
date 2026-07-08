@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 export interface ChatMessage {
   from: string;        // SS58 / H160 / "system" string from chat manager
+  name?: string;       // sender's TrUAPI username, when they shared one
   text: string;
   ts: number;          // local arrival timestamp in ms
 }

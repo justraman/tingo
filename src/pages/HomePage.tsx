@@ -50,7 +50,7 @@ function GameCard({ id, game, index }: Listing & { index: number }) {
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-white/60 to-white/90 transition-[width] duration-700"
+              className="h-full rounded-full bg-white/70 transition-[width] duration-700"
               style={{ width: `${Math.max(sold * 100, 2)}%` }}
             />
           </div>

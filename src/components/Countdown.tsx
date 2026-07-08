@@ -15,7 +15,7 @@ export function Countdown({ startTime, className }: Props) {
 
   const secsToGo = Number(startTime) - Math.floor(now / 1000);
   if (secsToGo <= 0) {
-    return <span className={cn("font-semibold text-emerald-400", className)}>live</span>;
+    return <span className={cn("font-semibold text-[hsl(162_40%_58%)]", className)}>live</span>;
   }
 
   const hours   = Math.floor(secsToGo / 3600);

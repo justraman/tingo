@@ -53,7 +53,7 @@ async function connectChat(): Promise<StatementStoreClient | null> {
 async function announce(chat: StatementStoreClient | null, gameId: bigint, text: string) {
   if (!chat) return;
   try {
-    await chat.publish<ChatPayload>({ text }, { topic2: roomIdForGame(gameId) });
+    await chat.publish<ChatPayload>({ text, name: "Tambola" }, { topic2: roomIdForGame(gameId) });
   } catch (e) {
     console.warn("[tambola-worker] announce failed", gameId.toString(), e);
   }

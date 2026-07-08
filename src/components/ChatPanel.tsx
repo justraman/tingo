@@ -18,6 +18,10 @@ interface Props {
 // which useSyncExternalStore treats as an ever-changing snapshot (infinite loop).
 const NO_MESSAGES: ChatMessage[] = [];
 
+function senderLabel(m: ChatMessage): string {
+  return m.name ?? shortenAddress(m.from, 6, 4);
+}
+
 export function ChatPanel({ gameId, disabled }: Props) {
   const messages = useChatStore((s) => s.byId[gameId.toString()] ?? NO_MESSAGES);
   const isClosed = useChatStore((s) => s.closed[gameId.toString()] ?? false);
@@ -30,7 +34,8 @@ export function ChatPanel({ gameId, disabled }: Props) {
   }, [gameId]);
 
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
+    const viewport = scrollerRef.current?.closest<HTMLElement>("[data-radix-scroll-area-viewport]");
+    viewport?.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
   const readonly = disabled || isClosed;
@@ -58,24 +63,28 @@ export function ChatPanel({ gameId, disabled }: Props) {
           {readonly && <span className="text-sm font-normal text-muted-foreground">(closed)</span>}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3 pt-0">
-        <ScrollArea className="glass-inset h-64 flex-1 rounded-2xl">
-          <div ref={scrollerRef} className="flex flex-col gap-2.5 p-3">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-0">
+        <ScrollArea className="glass-inset min-h-[20rem] flex-1 rounded-2xl">
+          <div ref={scrollerRef} className="flex flex-col gap-3 p-4">
             {messages.length === 0 && (
-              <div className="py-6 text-center text-xs text-muted-foreground">No messages yet — say hi!</div>
+              <div className="py-10 text-center text-sm text-muted-foreground">No messages yet — say hi!</div>
             )}
             {messages.map((m, i) => {
               const hue = hueFromSeed(m.from).hsl;
+              const sameSender = i > 0 && messages[i - 1].from === m.from;
               return (
-                <div key={i} className="animate-rise flex items-baseline gap-2 text-sm">
-                  <span
-                    className="mt-1 h-2 w-2 shrink-0 self-center rounded-full"
-                    style={{ background: `hsl(${hue})`, boxShadow: `0 0 8px hsl(${hue} / 0.6)` }}
-                  />
-                  <span className="font-mono text-xs" style={{ color: `hsl(${hue})` }}>
-                    {shortenAddress(m.from)}
-                  </span>
-                  <span className="min-w-0 break-words text-foreground/90">{m.text}</span>
+                <div key={i} className={sameSender ? "-mt-1.5" : undefined}>
+                  {!sameSender && (
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full" style={{ background: `hsl(${hue})` }} />
+                      <span className="text-xs font-semibold" style={{ color: `hsl(${hue})` }}>
+                        {senderLabel(m)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="animate-fade break-words pl-3.5 text-[15px] leading-relaxed text-foreground/90">
+                    {m.text}
+                  </div>
                 </div>
               );
             })}
@@ -89,16 +98,17 @@ export function ChatPanel({ gameId, disabled }: Props) {
             disabled={readonly || busy}
             placeholder={readonly ? "Chat ended" : "Type a message…"}
             onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
-            className="rounded-full"
+            className="h-12 rounded-full"
           />
           <Button
             size="icon"
             variant="secondary"
+            className="h-12 w-12 shrink-0"
             onClick={() => void send()}
             disabled={readonly || busy || !text.trim()}
             aria-label="Send message"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-5 w-5" />
           </Button>
         </div>
       </CardContent>

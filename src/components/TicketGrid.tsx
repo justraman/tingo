@@ -23,16 +23,11 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, size = "md"
     <div
       style={{ "--th": th } as CSSProperties}
       className={cn(
-        "ticket-sheen relative inline-block overflow-hidden backdrop-blur-2xl",
-        "border border-[hsl(var(--th)/0.35)] shadow-[0_8px_32px_hsl(var(--th)/0.15),inset_0_1px_0_hsl(0_0%_100%/0.15)]",
+        "glass inline-block",
         size === "sm" ? "rounded-xl p-1.5" : "rounded-2xl p-2",
       )}
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-[linear-gradient(135deg,hsl(var(--th)/0.25),hsl(var(--th)/0.07)_55%,hsl(var(--th)/0.16))]"
-      />
-      <div className="relative flex flex-col gap-0.5">
+      <div className="flex flex-col gap-0.5">
         {grid.map((row, r) => (
           <div key={r} className={cn("flex gap-0.5 p-0.5", highlightRow === r && "row-win")}>
             {row.map((v, c) => {
@@ -40,18 +35,17 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, size = "md"
               return (
                 <div
                   key={c}
-                  style={isDabbed ? ({ "--dab-tilt": `${(v % 7) - 3}deg` } as CSSProperties) : undefined}
                   className={cn(
                     "font-game flex items-center justify-center font-bold tabular-nums",
                     cellBase,
                     v === 0
-                      ? "bg-white/[0.04]"
+                      ? "bg-white/[0.03]"
                       : isDabbed
                         ? cn(
-                            "dab-in bg-[hsl(var(--th))] text-black/80 shadow-[0_0_14px_hsl(var(--th)/0.55),inset_0_1px_0_hsl(0_0%_100%/0.45)]",
-                            v === latest && "ring-2 ring-white/70",
+                            "dab-in bg-[hsl(var(--th)/0.9)] text-black/75",
+                            v === latest && "ring-1 ring-white/60",
                           )
-                        : "bg-white/[0.09] text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.1)]",
+                        : "bg-white/[0.06] text-foreground/90",
                   )}
                 >
                   {v === 0 ? "" : v}

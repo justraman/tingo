@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useAccounts } from "@/lib/chain/use-accounts";
 import { WalletStatus } from "@/components/WalletStatus";
+import { TxStatusModal } from "@/components/TxStatusModal";
 import { useWalletStore } from "@/lib/store/wallet";
-import { callCreateGame } from "@/lib/tambola/write";
+import { callCreateGame, type TxStatus } from "@/lib/tambola/write";
 import { parsePlanck } from "@/lib/utils";
 import { CHAIN } from "@/lib/chain/constants";
 
@@ -16,11 +17,11 @@ function toDatetimeLocalValue(d: Date): string {
 }
 
 const PRIZE_SPLIT = [
-  { label: "Top line", pct: 15, hsl: "347 89% 61%" },
-  { label: "Middle line", pct: 15, hsl: "38 95% 56%" },
-  { label: "Bottom line", pct: 15, hsl: "199 92% 56%" },
-  { label: "Full house", pct: 50, hsl: "258 88% 68%" },
-  { label: "Host fee", pct: 5, hsl: "0 0% 65%" },
+  { label: "Top line", pct: 15, hsl: "14 58% 60%" },
+  { label: "Middle line", pct: 15, hsl: "40 62% 58%" },
+  { label: "Bottom line", pct: 15, hsl: "205 52% 60%" },
+  { label: "Full house", pct: 50, hsl: "262 42% 65%" },
+  { label: "Host fee", pct: 5, hsl: "240 6% 50%" },
 ];
 
 function PrizeSplitBar() {
@@ -55,12 +56,12 @@ export function NewGamePage() {
   const defaultStart = toDatetimeLocalValue(new Date(Date.now() + 5 * 60 * 1000));
   const [start,  setStart]  = useState<string>(defaultStart);
   const [price,  setPrice]  = useState<string>("1");
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState<TxStatus | "">("");
   const [busy,   setBusy]   = useState<boolean>(false);
   const [error,  setError]  = useState<string>("");
 
   async function submit() {
-    setError(""); setStatus(""); setBusy(true);
+    setError(""); setStatus("signing"); setBusy(true);
     try {
       const account = accounts.find((a) => a.address === selected) ?? accounts[0];
       if (!account) throw new Error("No wallet account available");
@@ -114,13 +115,17 @@ export function NewGamePage() {
           </div>
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-3">
-          <Button onClick={submit} disabled={busy || !isReady} size="lg">
-            {busy ? `Working… ${status}` : "Create game"}
-          </Button>
+          <Button onClick={submit} disabled={busy || !isReady} size="lg">Create game</Button>
           <WalletStatus />
-          {error && <div className="text-sm text-red-400">{error}</div>}
         </CardFooter>
       </Card>
+      <TxStatusModal
+        open={busy || Boolean(error)}
+        action="Creating game"
+        status={status}
+        error={error}
+        onClose={() => setError("")}
+      />
     </div>
   );
 }

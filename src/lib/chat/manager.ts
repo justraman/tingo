@@ -5,9 +5,11 @@
  */
 
 import { StatementStoreClient } from "@parity/product-sdk-statement-store";
+import { ss58Encode } from "@parity/product-sdk-address";
 import { isHostAsync } from "@/lib/host/detect";
+import { getPrimaryUsername } from "@/lib/host/identity";
 import { useChatStore } from "@/lib/store/chat";
-import { CHAT_APP_NAME, CHAT_TTL_SECONDS, roomIdForGame, type ChatPayload } from "./protocol";
+import { CHAT_APP_NAME, CHAT_NAME_MAX, CHAT_TTL_SECONDS, roomIdForGame, type ChatPayload } from "./protocol";
 
 export { roomIdForGame };
 
@@ -38,8 +40,23 @@ async function connectClient(): Promise<StatementStoreClient | null> {
 export async function sendChat(gameId: bigint, text: string) {
   const client = await getChatClient();
   if (!client) throw new Error("chat unavailable (not in host?)");
-  const accepted = await client.publish<ChatPayload>({ text }, { topic2: roomIdForGame(gameId) });
+  const name = (await getPrimaryUsername().catch(() => null)) ?? undefined;
+  const payload: ChatPayload = name ? { text, name } : { text };
+  const accepted = await client.publish<ChatPayload>(payload, { topic2: roomIdForGame(gameId) });
   if (!accepted) throw new Error("chat message rejected by statement store");
+}
+
+function ss58FromSignerHex(signerHex: string | undefined): string {
+  if (!signerHex) return "anon";
+  const hex = signerHex.startsWith("0x") ? signerHex.slice(2) : signerHex;
+  if (hex.length !== 64) return signerHex;
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  try {
+    return ss58Encode(bytes);
+  } catch {
+    return signerHex;
+  }
 }
 
 const subscribedGames = new Set<string>();
@@ -54,8 +71,12 @@ export async function attachChatSubscription(gameId: bigint) {
   client.subscribe<ChatPayload>(
     (statement) => {
       if (typeof statement.data?.text !== "string") return;
+      const name = typeof statement.data.name === "string"
+        ? statement.data.name.trim().slice(0, CHAT_NAME_MAX) || undefined
+        : undefined;
       useChatStore.getState().append(gameId, {
-        from: statement.signerHex ?? "anon",
+        from: ss58FromSignerHex(statement.signerHex),
+        name,
         text: statement.data.text,
         ts: Date.now(),
       });

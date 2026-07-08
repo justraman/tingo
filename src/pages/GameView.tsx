@@ -10,6 +10,7 @@ import { TicketGenerator } from "@/components/TicketGenerator";
 import { ChatPanel } from "@/components/ChatPanel";
 import { WalletStatus } from "@/components/WalletStatus";
 import { WinnerBanner } from "@/components/WinnerBanner";
+import { TxStatusModal } from "@/components/TxStatusModal";
 
 import { useAccounts } from "@/lib/chain/use-accounts";
 import { useWalletStore } from "@/lib/store/wallet";
@@ -21,7 +22,7 @@ import { getClient } from "@/lib/chain/client";
 import {
   readGame, readDrawnNumbers, readTickets, readTicketsByOwner, readIsRefundClaimed, readWithdrawable,
 } from "@/lib/tambola/read";
-import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw } from "@/lib/tambola/write";
+import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
 import { gridFromMasks } from "@/lib/tambola/encode";
 import { BLOCK_TIME_SECONDS, BLOCKS_BETWEEN_DRAWS, CHAIN } from "@/lib/chain/constants";
@@ -46,7 +47,6 @@ export function GameView({ id }: { id: string }) {
 
   const { accounts, isReady } = useAccounts();
   const selected = useWalletStore((s) => s.selectedAddress) ?? accounts[0]?.address;
-  const setSelected = useWalletStore((s) => s.setSelected);
 
   const draft = useDraftStore((s) => s.byGame[gameId.toString()]);
   const clearDraft = useDraftStore((s) => s.clear);
@@ -67,7 +67,8 @@ export function GameView({ id }: { id: string }) {
   const [tab, setTab] = useState<"mine" | "others">("mine");
   const [refundClaimed, setRefundClaimed] = useState<boolean>(false);
   const [withdrawable, setWithdrawableAmt] = useState<bigint>(0n);
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState<TxStatus | "">("");
+  const [action, setAction] = useState<string>("");
   const [busy,   setBusy]   = useState<boolean>(false);
   const [error,  setError]  = useState<string>("");
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
@@ -192,8 +193,12 @@ export function GameView({ id }: { id: string }) {
   const drawOverdue = game?.state === 1 && bestBlock > 0n &&
     bestBlock >= game.lastDrawBlock + BigInt(BLOCKS_BETWEEN_DRAWS) + WORKER_GRACE_BLOCKS;
 
+  function beginTx(label: string) {
+    setError(""); setStatus("signing"); setAction(label); setBusy(true);
+  }
+
   async function onBuy() {
-    setError(""); setBusy(true);
+    beginTx("Buying ticket");
     try {
       const account = accounts.find((a) => a.address === selected) ?? accounts[0];
       if (!account) throw new Error("Connect a wallet first");
@@ -220,7 +225,7 @@ export function GameView({ id }: { id: string }) {
   }
 
   async function onDrawNumber() {
-    setError(""); setBusy(true);
+    beginTx("Drawing number");
     try {
       const account = accounts.find((a) => a.address === selected) ?? accounts[0];
       if (!account) throw new Error("Connect a wallet first");
@@ -238,7 +243,7 @@ export function GameView({ id }: { id: string }) {
   }
 
   async function onRefund() {
-    setError(""); setBusy(true);
+    beginTx("Claiming refund");
     try {
       const account = accounts.find((a) => a.address === selected) ?? accounts[0];
       if (!account) throw new Error("Connect a wallet first");
@@ -258,7 +263,7 @@ export function GameView({ id }: { id: string }) {
   }
 
   async function onWithdraw() {
-    setError(""); setBusy(true);
+    beginTx("Withdrawing winnings");
     try {
       const account = accounts.find((a) => a.address === selected) ?? accounts[0];
       if (!account) throw new Error("Connect a wallet first");
@@ -312,7 +317,7 @@ export function GameView({ id }: { id: string }) {
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
       <div className="flex flex-col gap-5">
         <div className="glass animate-rise rounded-3xl p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -332,7 +337,7 @@ export function GameView({ id }: { id: string }) {
             {stats.map((s) => (
               <div key={s.label} className="glass-inset rounded-2xl px-4 py-3">
                 <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{s.label}</div>
-                <div className={cn("font-game mt-0.5 font-bold tabular-nums", s.big ? "text-xl text-amber-300" : "text-base")}>
+                <div className={cn("font-game mt-0.5 font-bold tabular-nums", s.big ? "text-xl text-[hsl(var(--gold))]" : "text-base")}>
                   {s.value}
                 </div>
               </div>
@@ -348,50 +353,27 @@ export function GameView({ id }: { id: string }) {
         />
 
         {(startOverdue || drawOverdue) && (
-          <div className="animate-rise rounded-3xl border border-amber-300/25 bg-[linear-gradient(135deg,hsl(38_90%_55%/0.12),hsl(38_90%_55%/0.03))] p-6 backdrop-blur-2xl">
+          <div className="animate-rise rounded-3xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold)/0.04)] p-6 backdrop-blur-2xl">
             <div className="flex items-center gap-2 text-lg font-semibold leading-tight">
-              <Zap className="h-5 w-5 text-amber-300" />
+              <Zap className="h-5 w-5 text-[hsl(var(--gold))]" />
               {startOverdue ? "The game hasn't started" : "Draws have stalled"}
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">
               The draw worker seems to be down. Drawing is permissionless — anyone
               can {startOverdue ? "start the game" : "draw the next number"} from here.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button onClick={onDrawNumber} disabled={busy || !isReady || accounts.length === 0}>
-                {startOverdue ? "Start game" : "Draw next number"}
-              </Button>
-              <WalletStatus />
-            </div>
+            <Button onClick={onDrawNumber} disabled={busy || !isReady || accounts.length === 0} className="mt-4">
+              {startOverdue ? "Start game" : "Draw next number"}
+            </Button>
           </div>
         )}
 
         <Card className="animate-rise" style={{ animationDelay: "80ms" }}>
-          <CardHeader><CardTitle className="text-lg">Number board</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-lg">Drawn numbers</CardTitle></CardHeader>
           <CardContent>
             <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
           </CardContent>
         </Card>
-
-        {accounts.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Account:</span>
-            {accounts.map((a) => (
-              <button
-                key={a.address}
-                onClick={() => setSelected(a.address)}
-                className={cn(
-                  "cursor-pointer rounded-full border px-3 py-1 font-mono backdrop-blur-xl transition-colors",
-                  a.address === selected
-                    ? "border-white/40 bg-white/[0.14] text-foreground"
-                    : "border-white/10 bg-white/[0.04] text-muted-foreground hover:bg-white/[0.09] hover:text-foreground",
-                )}
-              >
-                {a.name ?? shortenAddress(a.address)}
-              </button>
-            ))}
-          </div>
-        )}
 
         {canBuy && (
           <TicketGenerator
@@ -475,9 +457,9 @@ export function GameView({ id }: { id: string }) {
         )}
 
         {withdrawable > 0n && (
-          <div className="animate-rise rounded-3xl border border-emerald-400/25 bg-[linear-gradient(135deg,hsl(158_74%_46%/0.14),hsl(158_74%_46%/0.04))] p-6 backdrop-blur-2xl shadow-[0_8px_32px_hsl(158_74%_46%/0.1)]">
+          <div className="animate-rise rounded-3xl border border-[hsl(162_40%_52%/0.25)] bg-[hsl(162_40%_52%/0.05)] p-6 backdrop-blur-2xl">
             <div className="flex items-center gap-2 text-lg font-semibold leading-tight">
-              <Coins className="h-5 w-5 text-emerald-300" />
+              <Coins className="h-5 w-5 text-[hsl(162_40%_58%)]" />
               You have winnings to withdraw
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">
@@ -489,11 +471,16 @@ export function GameView({ id }: { id: string }) {
           </div>
         )}
 
-        {status && <div className="text-xs text-muted-foreground">tx: {status}</div>}
-        {error  && <div className="text-sm text-red-400">{error}</div>}
+        <TxStatusModal
+          open={busy || Boolean(error)}
+          action={action}
+          status={status}
+          error={error}
+          onClose={() => setError("")}
+        />
       </div>
 
-      <div className="self-start lg:sticky lg:top-24">
+      <div className="self-start lg:sticky lg:top-24 lg:h-[calc(100dvh-7.5rem)]">
         <ChatPanel gameId={gameId} disabled={ended} />
       </div>
     </div>

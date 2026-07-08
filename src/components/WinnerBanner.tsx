@@ -10,7 +10,7 @@ interface Props {
 }
 
 const lineLabels = ["Top line", "Middle line", "Bottom line"];
-const lineHues = ["347 89% 61%", "38 95% 56%", "199 92% 56%"];
+const lineHues = ["14 58% 60%", "40 62% 58%", "205 52% 60%"];
 
 export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Props) {
   const lines = [topLine, middleLine, bottomLine];
@@ -18,7 +18,7 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
   if (!anything) return null;
 
   return (
-    <div className="animate-rise ticket-sheen relative overflow-hidden rounded-3xl border border-amber-300/25 bg-[linear-gradient(135deg,hsl(42_90%_55%/0.14),hsl(42_90%_55%/0.04)_60%)] p-5 backdrop-blur-2xl shadow-[0_8px_32px_hsl(42_90%_50%/0.12),inset_0_1px_0_hsl(0_0%_100%/0.12)]">
+    <div className="animate-rise rounded-3xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold)/0.05)] p-5 backdrop-blur-2xl shadow-[0_12px_36px_hsl(240_60%_1%/0.6),inset_0_1px_0_hsl(0_0%_100%/0.08)]">
       <div className="flex flex-col gap-2.5">
         {lines.map((l, i) =>
           l ? (
@@ -42,13 +42,13 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
         {fullhouse && (
           <div className={lines.some(Boolean) ? "mt-2 border-t border-white/10 pt-3" : ""}>
             <div className="flex items-center gap-3">
-              <span className="animate-glow flex h-11 w-11 items-center justify-center rounded-full bg-[radial-gradient(circle_at_35%_30%,hsl(48_100%_70%),hsl(38_95%_50%))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.5)]">
-                <Trophy className="h-5 w-5 text-amber-950" />
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.45)] bg-[hsl(var(--gold)/0.12)]">
+                <Trophy className="h-5 w-5 text-[hsl(var(--gold))]" />
               </span>
               <div>
                 <div className="text-base font-semibold leading-tight">
                   Full house — <span className="font-mono">{shortenAddress(fullhouse.winner)}</span>
-                  <span className="ml-2 text-amber-300">{formatPlanck(fullhouse.payout, CHAIN.decimals, CHAIN.symbol)}</span>
+                  <span className="ml-2 text-[hsl(var(--gold))]">{formatPlanck(fullhouse.payout, CHAIN.decimals, CHAIN.symbol)}</span>
                 </div>
                 {fullhouse.host && fullhouse.hostFee !== undefined && (
                   <div className="text-xs text-muted-foreground">
