@@ -17,7 +17,7 @@ export const TAMBOLA_ADDRESS =
 
 // Mirror of Tambola.DRAW_INTERVAL_SECONDS — keep in lockstep with the contract.
 // All game timing is wall-clock (block.timestamp); block numbers play no role.
-export const DRAW_INTERVAL_SECONDS = 12;
+export const DRAW_INTERVAL_SECONDS = 6;
 
 // pallet-revive maps the native balance onto the EVM's 18 decimals: a
 // `Revive.call { value }` is planck, but the contract sees `value × RATIO` as

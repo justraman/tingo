@@ -7,37 +7,47 @@ export interface FullhousePrize { winner: `0x${string}`; payout: bigint; host: `
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-export function lineWinnersFromGame(g: GameView, bps: PrizeBps): LinePrize[] {
-  const payout = (g.pot * BigInt(bps.lineBps)) / 10_000n;
-  return [g.topLineWinner, g.middleLineWinner, g.bottomLineWinner].flatMap((winner, line) =>
-    winner === ZERO_ADDRESS ? [] : [{ line, winner, payout }],
+// Mirrors the contract's split: equal shares, first winner absorbs the
+// division remainder.
+function splitShares(amount: bigint, count: number): bigint[] {
+  const share = amount / BigInt(count);
+  return Array.from({ length: count }, (_, i) =>
+    i === 0 ? amount - share * BigInt(count - 1) : share,
   );
 }
 
+export function lineWinnersFromGame(g: GameView, bps: PrizeBps): LinePrize[] {
+  const amount = (g.pot * BigInt(bps.lineBps)) / 10_000n;
+  return [g.topLineWinners, g.middleLineWinners, g.bottomLineWinners].flatMap((winners, line) => {
+    if (winners.length === 0) return [];
+    const shares = splitShares(amount, winners.length);
+    return winners.map((winner, i) => ({ line, winner, payout: shares[i] }));
+  });
+}
+
 // The stored line winners are exactly the lines paid before the game ended, so
-// the full-house share (fullhouseBps + lineBps per unclaimed line) is
+// the full-house pool (fullhouseBps + lineBps per unclaimed line) is
 // reconstructable from GameView without scanning historical events.
-export function fullhousePrizeFromGame(g: GameView, bps: PrizeBps): FullhousePrize | undefined {
-  if (g.fullhouseWinner === ZERO_ADDRESS) return undefined;
-  const unclaimedLines = 3 - lineWinnersFromGame(g, bps).length;
-  return {
-    winner: g.fullhouseWinner,
-    payout: (g.pot * BigInt(bps.fullhouseBps + bps.lineBps * unclaimedLines)) / 10_000n,
-    host: g.host,
-    hostFee: (g.pot * BigInt(bps.hostBps)) / 10_000n,
-  };
+export function fullhousePrizesFromGame(g: GameView, bps: PrizeBps): FullhousePrize[] {
+  if (g.fullhouseWinners.length === 0) return [];
+  const unclaimedLines = [g.topLineWinners, g.middleLineWinners, g.bottomLineWinners]
+    .filter((w) => w.length === 0).length;
+  const amount = (g.pot * BigInt(bps.fullhouseBps + bps.lineBps * unclaimedLines)) / 10_000n;
+  const hostFee = (g.pot * BigInt(bps.hostBps)) / 10_000n;
+  const shares = splitShares(amount, g.fullhouseWinners.length);
+  return g.fullhouseWinners.map((winner, i) => ({ winner, payout: shares[i], host: g.host, hostFee }));
 }
 
 export interface WinningTickets {
-  lineTickets: (`0x${string}` | undefined)[]; // ticket hash per line 0/1/2
-  fullhouseTicket?: `0x${string}`;
+  lineTickets: `0x${string}`[][]; // winning ticket hashes per line 0/1/2
+  fullhouseTickets: `0x${string}`[];
 }
 
-/** Attribute each won prize to the exact ticket the contract paid it for.
+/** Attribute each won prize to the exact tickets the contract paid it for.
  *
- * The contract only stores the winning *owner*, but `_checkWinners` awards a
- * prize to the first ticket (in draw order, then array order) whose mask
- * completes — which is fully reconstructable from `drawnOrder`. Without this,
+ * The contract only stores the winning *owners*, but a prize goes to every
+ * ticket that completes on the claiming draw — i.e. every ticket whose mask
+ * completes at the earliest completion index in `drawnOrder`. Without this,
  * every completed row on every ticket of a winning owner would look like the
  * winning line. */
 export function winningTickets(g: GameView, tickets: TicketView[], drawnOrder: number[]): WinningTickets {
@@ -57,24 +67,20 @@ export function winningTickets(g: GameView, tickets: TicketView[], drawnOrder: n
     return last;
   };
 
-  const pick = (winner: `0x${string}`, maskOf: (t: TicketView) => bigint): `0x${string}` | undefined => {
-    if (winner === ZERO_ADDRESS) return undefined;
-    let bestHash: `0x${string}` | undefined;
-    let bestAt = Infinity;
-    for (const t of tickets) {
-      if (t.owner.toLowerCase() !== winner.toLowerCase()) continue;
-      const at = completedAt(maskOf(t));
-      if (at < bestAt) { bestAt = at; bestHash = t.hash; }
-    }
-    return bestHash;
+  const pick = (won: boolean, maskOf: (t: TicketView) => bigint): `0x${string}`[] => {
+    if (!won) return [];
+    const at = tickets.map((t) => completedAt(maskOf(t)));
+    const first = Math.min(...at);
+    if (!Number.isFinite(first)) return [];
+    return tickets.filter((_, i) => at[i] === first).map((t) => t.hash);
   };
 
   return {
     lineTickets: [
-      pick(g.topLineWinner,    (t) => t.topRowMask),
-      pick(g.middleLineWinner, (t) => t.middleRowMask),
-      pick(g.bottomLineWinner, (t) => t.bottomRowMask),
+      pick(g.topLineWinners.length > 0,    (t) => t.topRowMask),
+      pick(g.middleLineWinners.length > 0, (t) => t.middleRowMask),
+      pick(g.bottomLineWinners.length > 0, (t) => t.bottomRowMask),
     ],
-    fullhouseTicket: pick(g.fullhouseWinner, (t) => t.fullhouseMask),
+    fullhouseTickets: pick(g.fullhouseWinners.length > 0, (t) => t.fullhouseMask),
   };
 }

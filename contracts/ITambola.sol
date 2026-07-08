@@ -33,10 +33,10 @@ interface ITambola {
         uint128 polledMask;
         uint256 pot;
         GameState state;
-        address topLineWinner;
-        address middleLineWinner;
-        address bottomLineWinner;
-        address fullhouseWinner;
+        address[] topLineWinners;
+        address[] middleLineWinners;
+        address[] bottomLineWinners;
+        address[] fullhouseWinners;
         uint256 drawnCount;
     }
 
@@ -47,8 +47,11 @@ interface ITambola {
     event GameCreated(uint256 indexed gameId, address indexed host, uint64 startTime, uint256 ticketPrice);
     event TicketBought(uint256 indexed gameId, address indexed player, uint256 ticketId, bytes32 hash);
     event NumberDrawn(uint256 indexed gameId, uint8 number, uint64 drawnAt);
-    /// `line` ∈ {0: top, 1: middle, 2: bottom}.
+    /// `line` ∈ {0: top, 1: middle, 2: bottom}. Emitted once per winning
+    /// ticket; simultaneous completions each carry their split share.
     event LineWon(uint256 indexed gameId, uint8 line, address indexed winner, uint256 payout);
+    /// Emitted once per full-house winner (split share); `hostFee` is the same
+    /// single fee in every emission, credited once.
     event GameWon(uint256 indexed gameId, address indexed winner, uint256 payout, address host, uint256 hostFee);
     event GameEndedNoWinner(uint256 indexed gameId);
     event RefundClaimed(uint256 indexed gameId, address indexed player, uint256 amount);

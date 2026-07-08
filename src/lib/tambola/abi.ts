@@ -58,12 +58,12 @@ export const TAMBOLA_ABI = [
         { name: "ticketCount",      type: "uint8"   },
         { name: "polledMask",       type: "uint128" },
         { name: "pot",              type: "uint256" },
-        { name: "state",            type: "uint8"   },
-        { name: "topLineWinner",    type: "address" },
-        { name: "middleLineWinner", type: "address" },
-        { name: "bottomLineWinner", type: "address" },
-        { name: "fullhouseWinner",  type: "address" },
-        { name: "drawnCount",       type: "uint256" },
+        { name: "state",             type: "uint8"     },
+        { name: "topLineWinners",    type: "address[]" },
+        { name: "middleLineWinners", type: "address[]" },
+        { name: "bottomLineWinners", type: "address[]" },
+        { name: "fullhouseWinners",  type: "address[]" },
+        { name: "drawnCount",        type: "uint256"   },
       ],
     }],
   },
@@ -219,10 +219,10 @@ export interface GameView {
   polledMask: bigint;
   pot: bigint;
   state: number;
-  topLineWinner: `0x${string}`;
-  middleLineWinner: `0x${string}`;
-  bottomLineWinner: `0x${string}`;
-  fullhouseWinner: `0x${string}`;
+  topLineWinners: readonly `0x${string}`[];
+  middleLineWinners: readonly `0x${string}`[];
+  bottomLineWinners: readonly `0x${string}`[];
+  fullhouseWinners: readonly `0x${string}`[];
   drawnCount: bigint;
 }
 

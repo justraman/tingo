@@ -65,6 +65,29 @@ contract TambolaTest is Test {
         l[18] =  9;  l[20] = 29;  l[22] = 49;  l[23] = 59;  l[26] = 90;
     }
 
+    /// Same 15 numbers as _layoutA rearranged into different rows (valid 5/5/5,
+    /// monotone columns) — its full house completes on the exact same draw as
+    /// layout A's, forcing a simultaneous full-house split.
+    function _layoutC() internal pure returns (uint8[27] memory l) {
+        // row 0
+        l[ 2] = 21;  l[ 4] = 41;  l[ 5] = 51;  l[ 6] = 61;  l[ 8] = 81;
+        // row 1
+        l[ 9] =  1;  l[11] = 22;  l[13] = 42;  l[14] = 52;  l[16] = 71;
+        // row 2
+        l[18] =  2;  l[19] = 11;  l[21] = 31;  l[25] = 72;  l[26] = 82;
+    }
+
+    /// Shares _layoutA's exact top row but differs elsewhere — its top line
+    /// completes on the same draw as layout A's, forcing a line split.
+    function _layoutD() internal pure returns (uint8[27] memory l) {
+        // row 0 (identical to _layoutA)
+        l[ 0] =  1;  l[ 2] = 21;  l[ 4] = 41;  l[ 6] = 61;  l[ 8] = 81;
+        // row 1
+        l[ 9] =  5;  l[11] = 25;  l[13] = 45;  l[15] = 65;  l[17] = 85;
+        // row 2
+        l[19] = 15;  l[21] = 35;  l[23] = 55;  l[25] = 75;  l[26] = 90;
+    }
+
     function _createGame(uint256 startsInSeconds) internal returns (uint256 gameId) {
         vm.prank(host);
         gameId = tambola.createGame(block.timestamp + startsInSeconds, TICKET_PRICE);
@@ -309,7 +332,8 @@ contract TambolaTest is Test {
 
         ITambola.GameView memory gv = tambola.getGame(gid);
         assertEq(uint8(gv.state), uint8(ITambola.GameState.Won));
-        assertEq(gv.fullhouseWinner, alice);
+        assertEq(gv.fullhouseWinners.length, 1);
+        assertEq(gv.fullhouseWinners[0], alice);
         // Alice won lines + full house (every line shares to herself).
         // Alice's credit: 3 lines * 15% (1500 bps) + fullhouse 50% (with 0 unclaimed lines) = 95%.
         uint256 aliceCredit = TICKET_PRICE * (3 * 1500 + 5000) / 10000;
@@ -347,6 +371,97 @@ contract TambolaTest is Test {
         vm.prank(alice);
         vm.expectRevert(bytes("nothing to withdraw"));
         tambola.withdraw();
+    }
+
+    // =========================================================
+    //                 simultaneous-winner splits
+    // =========================================================
+
+    /// Run draws until the game reaches a final state.
+    function _drive(uint256 gid) internal {
+        for (uint256 i = 0; i < 90; i++) {
+            ITambola.GameView memory g = tambola.getGame(gid);
+            if (g.state == ITambola.GameState.Won || g.state == ITambola.GameState.NoWinner) break;
+            tambola.drawNumber(gid);
+            _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
+        }
+    }
+
+    /// Layouts A and C hold the same 15 numbers, so both full houses complete
+    /// on the same draw: the 50% prize must be split, each winner getting an
+    /// equal GameWon payout, and every wei of the pot must be accounted for.
+    function test_fullhouse_splitBetweenSimultaneousWinners() public {
+        uint256 gid = _createGame(4);
+        _buy(gid, alice, _layoutA());
+        _buy(gid, bob,   _layoutC());
+        _advanceToStart(gid);
+
+        vm.recordLogs();
+        _drive(gid);
+
+        ITambola.GameView memory gv = tambola.getGame(gid);
+        assertEq(uint8(gv.state), uint8(ITambola.GameState.Won));
+        assertEq(gv.fullhouseWinners.length, 2);
+        assertEq(gv.fullhouseWinners[0], alice);
+        assertEq(gv.fullhouseWinners[1], bob);
+
+        // All 15 shared numbers drawn → every line was claimed by someone, so
+        // the full-house pool is exactly 50%, split 25/25.
+        uint256 pot = 2 * TICKET_PRICE;
+        uint256 expectedShare = pot * 5000 / 10000 / 2;
+        bytes32 gameWonSig = keccak256("GameWon(uint256,address,uint256,address,uint256)");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        uint256 gameWonCount;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] != gameWonSig) continue;
+            (uint256 payout,, uint256 hostFee) = abi.decode(logs[i].data, (uint256, address, uint256));
+            assertEq(payout, expectedShare);
+            assertEq(hostFee, pot * 500 / 10000);
+            gameWonCount++;
+        }
+        assertEq(gameWonCount, 2);
+
+        // Conservation: winners + host drain the pot exactly.
+        assertEq(
+            tambola.withdrawable(alice) + tambola.withdrawable(bob) + tambola.withdrawable(host),
+            pot
+        );
+    }
+
+    /// Layouts A and D share an identical top row, so the top line completes
+    /// for both tickets on the same draw and the 15% line prize splits 7.5/7.5.
+    function test_line_splitBetweenSimultaneousWinners() public {
+        uint256 gid = _createGame(4);
+        _buy(gid, alice, _layoutA());
+        _buy(gid, bob,   _layoutD());
+        _advanceToStart(gid);
+
+        vm.recordLogs();
+        _drive(gid);
+
+        ITambola.GameView memory gv = tambola.getGame(gid);
+        assertEq(gv.topLineWinners.length, 2);
+        assertEq(gv.topLineWinners[0], alice);
+        assertEq(gv.topLineWinners[1], bob);
+
+        uint256 pot = 2 * TICKET_PRICE;
+        uint256 expectedShare = pot * 1500 / 10000 / 2;
+        bytes32 lineWonSig = keccak256("LineWon(uint256,uint8,address,uint256)");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        uint256 topLineWonCount;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] != lineWonSig) continue;
+            (uint8 line, uint256 payout) = abi.decode(logs[i].data, (uint8, uint256));
+            if (line != 0) continue;
+            assertEq(payout, expectedShare);
+            topLineWonCount++;
+        }
+        assertEq(topLineWonCount, 2);
+
+        assertEq(
+            tambola.withdrawable(alice) + tambola.withdrawable(bob) + tambola.withdrawable(host),
+            pot
+        );
     }
 
     // =========================================================

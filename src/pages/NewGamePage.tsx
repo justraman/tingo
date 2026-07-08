@@ -10,7 +10,7 @@ import { TxStatusModal } from "@/components/TxStatusModal";
 import { useWalletStore } from "@/lib/store/wallet";
 import { callCreateGame, type TxStatus } from "@/lib/tambola/write";
 import { parsePlanck } from "@/lib/utils";
-import { CHAIN } from "@/lib/chain/constants";
+import { CHAIN, DRAW_INTERVAL_SECONDS } from "@/lib/chain/constants";
 
 function toDatetimeLocalValue(d: Date): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
@@ -110,7 +110,7 @@ export function NewGamePage() {
             <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Prize split</div>
             <PrizeSplitBar />
             <div className="text-xs text-muted-foreground">
-              Max 100 players. Numbers are drawn every 12 s after start. Unclaimed line shares roll into the full house.
+              Max 100 players. Numbers are drawn every {DRAW_INTERVAL_SECONDS} s after start. Unclaimed line shares roll into the full house.
             </div>
           </div>
         </CardContent>

@@ -25,7 +25,7 @@ import {
 } from "@/lib/tambola/read";
 import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
-import { lineWinnersFromGame, fullhousePrizeFromGame, winningTickets, ZERO_ADDRESS } from "@/lib/tambola/prize";
+import { lineWinnersFromGame, fullhousePrizesFromGame, winningTickets } from "@/lib/tambola/prize";
 import { playNumber, stopPlayback } from "@/lib/sound";
 import { useSoundStore } from "@/lib/store/sound";
 import { gridFromMasks } from "@/lib/tambola/encode";
@@ -35,11 +35,7 @@ import { hueFromSeed } from "@/lib/ticket-hues";
 import { Coins, Volume2, VolumeX, Zap } from "lucide-react";
 
 import type { TicketView } from "@/lib/tambola/abi";
-
-const STATE_LABELS = ["Starts soon", "Live", "Won", "No winner"];
-const STATE_VARIANTS: Record<number, "secondary" | "live" | "success" | "outline"> = {
-  0: "secondary", 1: "live", 2: "success", 3: "outline",
-};
+import { STATE_LABELS, STATE_VARIANTS, CANCELLED_STATE, effectiveState } from "@/lib/tambola/state";
 
 // How long past due a draw may be before we assume the worker is down and
 // offer the player the permissionless drawNumber poke.
@@ -58,7 +54,7 @@ export function GameView({ id }: { id: string }) {
   const setGame = useGameStore((s) => s.setGame);
   const appendDrawn = useGameStore((s) => s.appendDrawn);
   const appendLineWinner = useGameStore((s) => s.appendLineWinner);
-  const setFinalWinner = useGameStore((s) => s.setFinalWinner);
+  const appendFinalWinner = useGameStore((s) => s.appendFinalWinner);
   const setNoWinner = useGameStore((s) => s.setNoWinner);
 
   const closeChat = useChatStore((s) => s.close);
@@ -108,21 +104,20 @@ export function GameView({ id }: { id: string }) {
         if (cancel) return;
         setGame(gameId, { game: g, drawn });
         if (g.state === 3) setNoWinner(gameId);
-        const anyWinner = [g.topLineWinner, g.middleLineWinner, g.bottomLineWinner, g.fullhouseWinner]
-          .some((w) => w !== ZERO_ADDRESS);
+        const anyWinner = [g.topLineWinners, g.middleLineWinners, g.bottomLineWinners, g.fullhouseWinners]
+          .some((w) => w.length > 0);
         if (anyWinner) {
           // Payouts are pure functions of pot + on-chain bps, so cold-load can
           // reconstruct them without scanning historical events.
           const bps = await readPrizeBps();
           if (cancel) return;
           for (const w of lineWinnersFromGame(g, bps)) appendLineWinner(gameId, w);
-          const fullhouse = fullhousePrizeFromGame(g, bps);
-          if (fullhouse) setFinalWinner(gameId, fullhouse);
+          for (const w of fullhousePrizesFromGame(g, bps)) appendFinalWinner(gameId, w);
         }
       } catch (e) { console.error(e); }
     })();
     return () => { cancel = true; };
-  }, [gameId, setGame, appendLineWinner, setFinalWinner, setNoWinner]);
+  }, [gameId, setGame, appendLineWinner, appendFinalWinner, setNoWinner]);
 
   // Tickets + my withdrawable whenever the wallet changes.
   useEffect(() => {
@@ -164,7 +159,7 @@ export function GameView({ id }: { id: string }) {
             appendLineWinner(gameId, { line: e.args.line, winner: e.args.winner, payout: e.args.payout });
             break;
           case "GameWon":
-            setFinalWinner(gameId, {
+            appendFinalWinner(gameId, {
               winner:  e.args.winner,
               payout:  e.args.payout,
               host:    e.args.host,
@@ -194,12 +189,12 @@ export function GameView({ id }: { id: string }) {
       teardown?.();
       stopPlayback();
     };
-  }, [gameId, selected, appendDrawn, appendLineWinner, setFinalWinner, setNoWinner, setGame, closeChat, refreshTickets]);
+  }, [gameId, selected, appendDrawn, appendLineWinner, appendFinalWinner, setNoWinner, setGame, closeChat, refreshTickets]);
 
   const game = snap?.game;
   const drawn = snap?.drawn ?? [];
   const ended = game?.state === 2 || game?.state === 3;
-  const lineWinner = (line: number) => snap?.lineWinners.find((w) => w.line === line);
+  const lineWinners = (line: number) => snap?.lineWinners.filter((w) => w.line === line) ?? [];
 
   // The worker normally pokes drawNumber, but it is permissionless — when the
   // worker misses its slot by WORKER_GRACE, let the player poke instead.
@@ -316,15 +311,16 @@ export function GameView({ id }: { id: string }) {
 
   const winning = winningTickets(game, allTickets, drawn);
   const wonRowsFor = (t: TicketView): number[] =>
-    [0, 1, 2].filter((line) => winning.lineTickets[line] === t.hash);
-  const isFullhouseTicket = (t: TicketView): boolean => winning.fullhouseTicket === t.hash;
+    [0, 1, 2].filter((line) => winning.lineTickets[line].includes(t.hash));
+  const isFullhouseTicket = (t: TicketView): boolean => winning.fullhouseTickets.includes(t.hash);
   const lineNames = ["Top line", "Middle line", "Bottom line"];
   const overlayFor = (t: TicketView) => {
-    if (!ended) return undefined;
     const wins: TicketOverlay[] = wonRowsFor(t).map((r) => ({ label: `${lineNames[r]} winner`, kind: "line" }));
     if (isFullhouseTicket(t)) wins.push({ label: "Full house winner", kind: "fullhouse" as const });
     return wins.length > 0 ? wins : undefined;
   };
+
+  const uiState = effectiveState(game, nowSec);
 
   const stats = [
     { label: "Pot", value: formatPlanck(game.pot, CHAIN.decimals, CHAIN.symbol), big: true },
@@ -340,11 +336,11 @@ export function GameView({ id }: { id: string }) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h1 className="font-game text-2xl font-bold tracking-tight">Game #{gameId.toString()}</h1>
-              <Badge variant={STATE_VARIANTS[game.state] ?? "outline"}>{STATE_LABELS[game.state]}</Badge>
+              <Badge variant={STATE_VARIANTS[uiState] ?? "outline"}>{STATE_LABELS[uiState]}</Badge>
             </div>
             <div className="flex items-center gap-2">
               <GameRules shares={prizeShares} />
-              {game.state === 0 && (
+              {uiState === 0 && (
                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 backdrop-blur-xl">
                   <span className="text-xs text-muted-foreground">Starts in</span>
                   <Countdown startTime={game.startTime} className="text-sm" />
@@ -366,11 +362,21 @@ export function GameView({ id }: { id: string }) {
         </div>
 
         <WinnerBanner
-          topLine={lineWinner(0)}
-          middleLine={lineWinner(1)}
-          bottomLine={lineWinner(2)}
-          fullhouse={snap?.finalWinner}
+          topLine={lineWinners(0)}
+          middleLine={lineWinners(1)}
+          bottomLine={lineWinners(2)}
+          fullhouse={snap?.finalWinners ?? []}
         />
+
+        {uiState === CANCELLED_STATE && (
+          <div className="animate-rise rounded-3xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-2xl">
+            <div className="text-lg font-semibold leading-tight">Game cancelled</div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              No tickets were sold before the start time, so this game can never begin.
+              Nothing was collected — there is nothing to refund.
+            </p>
+          </div>
+        )}
 
         {(startOverdue || drawOverdue) && (
           <div className="animate-rise rounded-3xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold)/0.04)] p-6 backdrop-blur-2xl">
@@ -453,6 +459,7 @@ export function GameView({ id }: { id: string }) {
                     highlightRow={ended ? undefined : wonRowsFor(t)[0]}
                     struckRows={ended ? wonRowsFor(t) : undefined}
                     overlay={overlayFor(t)}
+                    overlayMode={ended ? "cover" : "ribbon"}
                     hue={hueFromSeed(t.hash)}
                   />
                   <div className="font-mono text-xs text-muted-foreground">hash {shortenAddress(t.hash)}</div>
@@ -469,6 +476,7 @@ export function GameView({ id }: { id: string }) {
                     highlightRow={ended ? undefined : wonRowsFor(t)[0]}
                     struckRows={ended ? wonRowsFor(t) : undefined}
                     overlay={overlayFor(t)}
+                    overlayMode={ended ? "cover" : "ribbon"}
                     size="sm"
                     hue={hueFromSeed(t.hash)}
                   />
@@ -493,7 +501,7 @@ export function GameView({ id }: { id: string }) {
           </Card>
         )}
 
-        {withdrawable > 0n && (
+        {ended && withdrawable > 0n && (
           <div className="animate-rise rounded-3xl border border-[hsl(162_40%_52%/0.25)] bg-[hsl(162_40%_52%/0.05)] p-6 backdrop-blur-2xl">
             <div className="flex items-center gap-2 text-lg font-semibold leading-tight">
               <Coins className="h-5 w-5 text-[hsl(162_40%_58%)]" />

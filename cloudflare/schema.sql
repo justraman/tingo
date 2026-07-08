@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS games (
   ticket_count       INTEGER NOT NULL,
   pot                TEXT    NOT NULL,
   state              INTEGER NOT NULL,           -- 0=Pending 1=Live 2=Won 3=NoWinner
-  top_line_winner    TEXT,
+  top_line_winner    TEXT,                       -- JSON array of winner addresses (split prizes)
   middle_line_winner TEXT,
   bottom_line_winner TEXT,
   fullhouse_winner   TEXT,

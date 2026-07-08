@@ -18,7 +18,7 @@ React SPA that runs **inside a Polkadot host** (Desktop / Mobile / Web) as a san
 "product" and talks to the chain and to host services (wallet signing, in-game chat,
 the chain connection) through **TrUAPI**, the host's capability API. A Cloudflare
 cron worker (`cloudflare/`) announces game milestones in each game's chat room and
-pokes the permissionless `drawNumber` forward every `DRAW_INTERVAL_SECONDS` (12 s).
+pokes the permissionless `drawNumber` forward every `DRAW_INTERVAL_SECONDS` (6 s).
 All game timing is wall-clock (`block.timestamp`) — block numbers play no role in
 the rules.
 
@@ -183,7 +183,8 @@ external signature, and constant; the frontend ABI derives from it. One contract
 
 `Game` packs: `host`, `ticketPrice`, `startTime` (unix seconds), `lastDrawTime` (unix seconds), `maxTickets`,
 `ticketCount`, a 90-bit `polledMask` of drawn numbers, the `pot`, a `GameState`
-(`Pending → Live → Won | NoWinner`), the four winner addresses, the ordered
+(`Pending → Live → Won | NoWinner`), the four winner-address arrays (a prize
+splits equally when several tickets complete it on the same draw), the ordered
 `drawnOrder[]`, and `tickets[]`. Side mappings: per-game layout-hash dedup
 (`_ticketHashSeen`), per-player ticket ids (`_playerTicketIds`, a player may hold
 several), refund tracking (`_refundClaimed`), and the global pull-payment ledger
@@ -209,7 +210,7 @@ ticket's 3×9 grid from the row masks (`gridFromMasks` in `encode.ts`).
    `TicketBought`.
 3. **`drawNumber(gameId)`** — **permissionless**. Anyone (the worker, or any player)
    can call once `block.timestamp ≥ startTime` and `block.timestamp ≥ lastDrawTime +
-   DRAW_INTERVAL_SECONDS` (12 s). Picks an undrawn number via `_nextNumber`, sets the mask,
+   DRAW_INTERVAL_SECONDS` (6 s). Picks an undrawn number via `_nextNumber`, sets the mask,
    appends to history, emits `NumberDrawn`, then `_checkWinners`. If all 90 numbers are
    drawn with no full house → `NoWinner` + `GameEndedNoWinner`.
 4. **`claimRefund(gameId)`** — only in `NoWinner`. Each ticket holder claims an equal
@@ -219,9 +220,10 @@ ticket's 3×9 grid from the row masks (`gridFromMasks` in `encode.ts`).
 
 ### 4.3 Prize math (basis points of the pot)
 
-`LINE_BPS = 1500` ×3, `FULLHOUSE_BPS = 5000`, `HOST_BPS = 500`. Each line pays the
-**first** ticket to complete it. The game ends **only** on a full house; at that point
-the full-house winner receives `FULLHOUSE_BPS + LINE_BPS × (unclaimed lines)` — i.e.
+`LINE_BPS = 1500` ×3, `FULLHOUSE_BPS = 5000`, `HOST_BPS = 500`. Each line pays every
+ticket that completes it on its claiming draw, split equally (the first winner absorbs
+the division remainder). The game ends **only** on a full house; at that point the
+full-house winners split `FULLHOUSE_BPS + LINE_BPS × (unclaimed lines)` — i.e.
 **unclaimed line shares roll into the full house** — and the host gets `HOST_BPS`. Sums
 to 100% in every combination (covered by tests). Integer division leaves a few wei of
 dust in the contract (negligible; a `sweepDust` could be added).
@@ -379,8 +381,8 @@ Host schedules     → callCreateGame → Revive.call createGame → GameCreated
                                                               → worker announces game in chat
 Player generates   → ticket.ts (crypto RNG) → draft store (localStorage)
 Player buys        → callBuyTicket(value=price) → buyTicket validates+stores bitmaps → TicketBought
-Start time passes  → worker/players call drawNumber every 12 s → NumberDrawn (×up to 90)
-                       _checkWinners → LineWon (first to complete each row)
+Start time passes  → worker/players call drawNumber every 6 s → NumberDrawn (×up to 90)
+                       _checkWinners → LineWon (every ticket completing a row on its claiming draw; splits share)
 Full house hit     → GameWon (fullhouse + unclaimed lines, + host fee) → state Won → chat closes
    or 90 drawn      → GameEndedNoWinner → players claimRefund
 Anyone with a credit→ callWithdraw → transfer from pull-payment ledger → Withdrawn
@@ -404,7 +406,7 @@ recorded so they are not rediscovered later.
    gone. The `Countdown` is wall-clock based; `blockTimeSec` was dropped from
    `constants.ts`.
 3. ~~**`BLOCKS_BETWEEN_DRAWS` drift.**~~ **Resolved, then superseded (2026-07-08).**
-   Draw cadence is now wall-clock: `DRAW_INTERVAL_SECONDS = 12` gated on
+   Draw cadence is now wall-clock: `DRAW_INTERVAL_SECONDS = 6` gated on
    `block.timestamp`, mirrored in `src/lib/chain/constants.ts`. (Still a hardcoded
    copy — read it on-chain when descriptors land.)
 4. ~~**`getHostSigner` does not exist**~~ **Superseded (2026-07-08).** The bundled

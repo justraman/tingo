@@ -182,6 +182,7 @@ function tryGenerateStrip(): TicketNode[] | null {
       if (!placeRandomNumber(sets, columns, i, 2)) return null;
     }
   }
+  
   for (let i = 0; i < COLS; i++) {
     while (columns[i].length > 0) {
       if (!placeRandomNumber(sets, columns, i, 3)) return null;

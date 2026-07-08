@@ -52,7 +52,7 @@ const DRAWER_CRON = "* * * * *";
 const INDEXER_CRON = "*/5 * * * *";
 // Leave headroom before the next minute's invocation starts.
 const DRAWER_BUDGET_MS = 52_000;
-const FALLBACK_DRAW_INTERVAL = 12n;
+const FALLBACK_DRAW_INTERVAL = 6n;
 
 const nowSeconds = () => BigInt(Math.floor(Date.now() / 1000));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -205,7 +205,7 @@ async function submitDraw(unsafe: any, env: Env, signer: PolkadotSigner, signerA
       });
 
   // Resolve on best-block inclusion — waiting for finality would eat the
-  // 12 s cadence budget; the contract re-checks everything anyway.
+  // draw-cadence budget; the contract re-checks everything anyway.
   await new Promise<void>((resolve, reject) => {
     const sub = tx.signSubmitAndWatch(signer, { mortality: { mortal: true, period: 64 } }).subscribe({
       next: (e: any) => {
@@ -301,8 +301,10 @@ async function runIndexer(env: Env) {
              indexed_at     = excluded.indexed_at`,
         ).bind(
           Number(id), g.host, g.ticketPrice.toString(), Number(g.startTime), Number(g.lastDrawTime),
-          g.ticketCount, g.pot.toString(), g.state, g.topLineWinner, g.middleLineWinner,
-          g.bottomLineWinner, g.fullhouseWinner, JSON.stringify(Array.from(drawn)), Number(nowSeconds()),
+          g.ticketCount, g.pot.toString(), g.state,
+          JSON.stringify(g.topLineWinners), JSON.stringify(g.middleLineWinners),
+          JSON.stringify(g.bottomLineWinners), JSON.stringify(g.fullhouseWinners),
+          JSON.stringify(Array.from(drawn)), Number(nowSeconds()),
         ),
       );
     }

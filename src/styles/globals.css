@@ -151,6 +151,30 @@
     animation: fullhouse-badge-pulse 2.8s ease-in-out infinite;
   }
 
+  /* ---- Latest-draw ball ---------------------------------------------- */
+
+  /* A sphere in the current decade's hue: specular highlight up-left, core
+     shadow down-right, and an ivory label disc like a physical tambola ball. */
+  .draw-ball {
+    background:
+      radial-gradient(circle at 30% 26%, hsl(0 0% 100% / 0.45), transparent 42%),
+      radial-gradient(circle at 72% 82%, hsl(240 40% 4% / 0.55), transparent 62%),
+      hsl(var(--ball));
+    border: 1px solid hsl(0 0% 100% / 0.14);
+    box-shadow:
+      inset 0 -10px 22px hsl(240 40% 4% / 0.45),
+      inset 0 2px 6px hsl(0 0% 100% / 0.25),
+      0 10px 30px hsl(var(--ball) / 0.35),
+      0 14px 44px hsl(240 60% 1% / 0.6);
+  }
+  .draw-ball-label {
+    background: linear-gradient(165deg, hsl(40 25% 97%), hsl(40 18% 86%));
+    color: hsl(240 12% 14%);
+    box-shadow:
+      inset 0 -2px 5px hsl(240 30% 20% / 0.28),
+      inset 0 1px 0 hsl(0 0% 100% / 0.9);
+  }
+
   /* ---- Latest-draw ripple (plays once per mount) -------------------- */
 
   .ripple-once::after {

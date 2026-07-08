@@ -1,7 +1,7 @@
 // Tambola Cloudflare worker — cron-driven draw poker + D1 game indexer.
 //
 // Two cron triggers dispatch inside src/index.ts on `controller.cron`:
-//   "* * * * *"   → drawer: ticks drawNumber every DRAW_INTERVAL_SECONDS (12 s)
+//   "* * * * *"   → drawer: ticks drawNumber every DRAW_INTERVAL_SECONDS (6 s)
 //                   within the minute (Cloudflare crons can't fire sub-minute).
 //   "*/5 * * * *" → indexer: snapshots every game into the D1 database.
 {
@@ -18,7 +18,7 @@
     // People chain node exposing the statement_* RPC — chat announcements
     // publish here in local mode (no host).
     "STATEMENT_RPC": "wss://paseo-people-next-system-rpc.polkadot.io",
-    "TAMBOLA_ADDRESS": "0xb387482bfd8feb559fdd6988dd70574f3ef13531",
+    "TAMBOLA_ADDRESS": "0x6b383c507a7cde394279ec598038bdf9ad0681e7",
     // Must be a Revive-mapped account: the runtime rejects dry-runs from
     // unmapped origins. The dev deploy signer is mapped by the deploy itself.
     "READ_ONLY_ORIGIN": "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV"

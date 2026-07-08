@@ -7,8 +7,10 @@ import {ITambola} from "./ITambola.sol";
 /// @notice One contract holds many concurrent games. Each game has up to 100 tickets
 ///         (a player may hold several), a host-defined ticket price, a host-defined
 ///         start time, and pays 15/15/15/50/5 to top-line / middle-line /
-///         bottom-line / full-house / host. All timing is wall-clock
-///         (`block.timestamp`) — block numbers play no role in game rules.
+///         bottom-line / full-house / host. When several tickets complete the
+///         same prize on the same draw, that prize is split equally between
+///         them. All timing is wall-clock (`block.timestamp`) — block numbers
+///         play no role in game rules.
 /// @dev    Public types, events, and external function signatures live in ITambola.sol —
 ///         keep them in sync if you change either side.
 /// @custom:cdm @tambola/tambola
@@ -23,10 +25,10 @@ contract Tambola is ITambola {
         uint128 polledMask;      // 90-bit bitmap of drawn numbers
         uint256 pot;             // total contributions (constant after the last buyTicket)
         GameState state;
-        address topLineWinner;
-        address middleLineWinner;
-        address bottomLineWinner;
-        address fullhouseWinner;
+        address[] topLineWinners;     // every ticket that completed the line on its claiming draw
+        address[] middleLineWinners;
+        address[] bottomLineWinners;
+        address[] fullhouseWinners;
         uint8[]   drawnOrder;    // ordered draw history, length ≤ 90
         Ticket[]  tickets;       // ticketId is `index + 1`
     }
@@ -46,7 +48,7 @@ contract Tambola is ITambola {
 
     bool private _entered;
 
-    uint16 public constant override DRAW_INTERVAL_SECONDS = 12;
+    uint16 public constant override DRAW_INTERVAL_SECONDS = 6;
     uint8  public constant override MAX_TICKETS            = 100;
     uint16 public constant override FULLHOUSE_BPS        = 5000;  // 50 %
     uint16 public constant override LINE_BPS             = 1500;  // 15 % each
@@ -156,9 +158,9 @@ contract Tambola is ITambola {
         require(!_refundClaimed[gameId][msg.sender],                "already claimed");
 
         uint16 linesPaid =
-            (g.topLineWinner    != address(0) ? 1 : 0) +
-            (g.middleLineWinner != address(0) ? 1 : 0) +
-            (g.bottomLineWinner != address(0) ? 1 : 0);
+            (g.topLineWinners.length    != 0 ? 1 : 0) +
+            (g.middleLineWinners.length != 0 ? 1 : 0) +
+            (g.bottomLineWinners.length != 0 ? 1 : 0);
         uint256 potRemaining = g.pot * (10000 - LINE_BPS * linesPaid) / 10000;
         uint256 amount       = (potRemaining / g.ticketCount) * ownedTickets;
 
@@ -234,47 +236,63 @@ contract Tambola is ITambola {
         revert("unreachable");
     }
 
-    /// After a draw, walk every ticket and award newly completed lines + the full house if any.
+    /// After a draw, award every ticket that newly completed a line, then the full
+    /// house. Tickets completing the same prize on the same draw split it equally
+    /// (per ticket, so an owner holding two completing tickets gets two shares).
     /// Returns true iff the game ended (full house found).
     function _checkWinners(uint256 gameId, Game storage g) internal returns (bool) {
-        uint256 lineAmount = g.pot * LINE_BPS / 10000;
+        _awardLine(gameId, g, 0, g.topLineWinners);
+        _awardLine(gameId, g, 1, g.middleLineWinners);
+        _awardLine(gameId, g, 2, g.bottomLineWinners);
 
         uint256 len = g.tickets.length;
         for (uint256 i = 0; i < len; i++) {
             Ticket storage t = g.tickets[i];
-
-            if (g.topLineWinner == address(0) && (t.topRowMask & g.polledMask) == t.topRowMask) {
-                g.topLineWinner = t.owner;
-                _pay(t.owner, lineAmount);
-                emit LineWon(gameId, 0, t.owner, lineAmount);
-            }
-            if (g.middleLineWinner == address(0) && (t.middleRowMask & g.polledMask) == t.middleRowMask) {
-                g.middleLineWinner = t.owner;
-                _pay(t.owner, lineAmount);
-                emit LineWon(gameId, 1, t.owner, lineAmount);
-            }
-            if (g.bottomLineWinner == address(0) && (t.bottomRowMask & g.polledMask) == t.bottomRowMask) {
-                g.bottomLineWinner = t.owner;
-                _pay(t.owner, lineAmount);
-                emit LineWon(gameId, 2, t.owner, lineAmount);
-            }
-
-            if ((t.fullhouseMask & g.polledMask) == t.fullhouseMask) {
-                g.fullhouseWinner = t.owner;
-                uint256 unclaimedLines =
-                    (g.topLineWinner    == address(0) ? 1 : 0) +
-                    (g.middleLineWinner == address(0) ? 1 : 0) +
-                    (g.bottomLineWinner == address(0) ? 1 : 0);
-                uint256 fullAmount = g.pot * (FULLHOUSE_BPS + LINE_BPS * unclaimedLines) / 10000;
-                uint256 hostFee    = g.pot * HOST_BPS / 10000;
-                _pay(t.owner, fullAmount);
-                _pay(g.host,  hostFee);
-                g.state = GameState.Won;
-                emit GameWon(gameId, t.owner, fullAmount, g.host, hostFee);
-                return true;
-            }
+            if ((t.fullhouseMask & g.polledMask) == t.fullhouseMask) g.fullhouseWinners.push(t.owner);
         }
-        return false;
+        uint256 n = g.fullhouseWinners.length;
+        if (n == 0) return false;
+
+        uint256 unclaimedLines =
+            (g.topLineWinners.length    == 0 ? 1 : 0) +
+            (g.middleLineWinners.length == 0 ? 1 : 0) +
+            (g.bottomLineWinners.length == 0 ? 1 : 0);
+        uint256 fullAmount = g.pot * (FULLHOUSE_BPS + LINE_BPS * unclaimedLines) / 10000;
+        uint256 hostFee    = g.pot * HOST_BPS / 10000;
+        uint256 share      = fullAmount / n;
+        for (uint256 i = 0; i < n; i++) {
+            // The first winner absorbs the split remainder so the pot stays fully paid out.
+            uint256 payout = i == 0 ? fullAmount - share * (n - 1) : share;
+            _pay(g.fullhouseWinners[i], payout);
+            emit GameWon(gameId, g.fullhouseWinners[i], payout, g.host, hostFee);
+        }
+        _pay(g.host, hostFee);
+        g.state = GameState.Won;
+        return true;
+    }
+
+    /// Claim `line` for every ticket whose row completed, splitting the line
+    /// prize equally between them. No-op if the line was claimed on an earlier
+    /// draw or no ticket completes it now.
+    function _awardLine(uint256 gameId, Game storage g, uint8 line, address[] storage winners) internal {
+        if (winners.length != 0) return;
+
+        uint256 len = g.tickets.length;
+        for (uint256 i = 0; i < len; i++) {
+            Ticket storage t = g.tickets[i];
+            uint128 mask = line == 0 ? t.topRowMask : line == 1 ? t.middleRowMask : t.bottomRowMask;
+            if ((mask & g.polledMask) == mask) winners.push(t.owner);
+        }
+        uint256 n = winners.length;
+        if (n == 0) return;
+
+        uint256 amount = g.pot * LINE_BPS / 10000;
+        uint256 share  = amount / n;
+        for (uint256 i = 0; i < n; i++) {
+            uint256 payout = i == 0 ? amount - share * (n - 1) : share;
+            _pay(winners[i], payout);
+            emit LineWon(gameId, line, winners[i], payout);
+        }
     }
 
     /// Credit `amount` to `to`'s pull-payment balance. Never reverts (other
@@ -312,12 +330,12 @@ contract Tambola is ITambola {
             ticketCount:      g.ticketCount,
             polledMask:       g.polledMask,
             pot:              g.pot,
-            state:            g.state,
-            topLineWinner:    g.topLineWinner,
-            middleLineWinner: g.middleLineWinner,
-            bottomLineWinner: g.bottomLineWinner,
-            fullhouseWinner:  g.fullhouseWinner,
-            drawnCount:       g.drawnOrder.length
+            state:             g.state,
+            topLineWinners:    g.topLineWinners,
+            middleLineWinners: g.middleLineWinners,
+            bottomLineWinners: g.bottomLineWinners,
+            fullhouseWinners:  g.fullhouseWinners,
+            drawnCount:        g.drawnOrder.length
         });
     }
 

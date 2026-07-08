@@ -8,15 +8,11 @@ import { CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, displayAddress } from "@/lib/utils";
 import { ArrowRight, Ticket, Trophy } from "lucide-react";
 import type { GameView } from "@/lib/tambola/abi";
+import { STATE_LABELS, STATE_VARIANTS, effectiveState } from "@/lib/tambola/state";
 
-interface Listing { id: bigint; game: GameView; }
+interface Listing { id: bigint; game: GameView; state: number; }
 
-const STATE_LABELS = ["Starts soon", "Live", "Won", "No winner"];
-const STATE_VARIANTS: Record<number, "default" | "secondary" | "success" | "outline" | "live"> = {
-  0: "secondary", 1: "live", 2: "success", 3: "outline",
-};
-
-function GameCard({ id, game, index }: Listing & { index: number }) {
+function GameCard({ id, game, state, index }: Listing & { index: number }) {
   const sold = game.maxTickets > 0 ? game.ticketCount / game.maxTickets : 0;
   return (
     <Link href={`/game/${id}`} className="block">
@@ -26,7 +22,7 @@ function GameCard({ id, game, index }: Listing & { index: number }) {
       >
         <div className="flex items-center justify-between">
           <span className="font-game text-lg font-bold tracking-tight">Game #{id.toString()}</span>
-          <Badge variant={STATE_VARIANTS[game.state] ?? "outline"}>{STATE_LABELS[game.state]}</Badge>
+          <Badge variant={STATE_VARIANTS[state] ?? "outline"}>{STATE_LABELS[state]}</Badge>
         </div>
         <div className="mt-1 text-xs text-muted-foreground">Host {displayAddress(game.host)}</div>
 
@@ -69,8 +65,8 @@ function StateFilter({ games, filter, onChange }: {
   filter: number | null;
   onChange: (state: number | null) => void;
 }) {
-  const counts = games.reduce<Record<number, number>>((acc, { game }) => {
-    acc[game.state] = (acc[game.state] ?? 0) + 1;
+  const counts = games.reduce<Record<number, number>>((acc, { state }) => {
+    acc[state] = (acc[state] ?? 0) + 1;
     return acc;
   }, {});
   const options: Array<{ state: number | null; label: string; count: number }> = [
@@ -107,7 +103,7 @@ export function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [filter, setFilter] = useState<number | null>(null);
-  const visible = filter === null ? games : games.filter(({ game }) => game.state === filter);
+  const visible = filter === null ? games : games.filter(({ state }) => state === filter);
 
   useEffect(() => {
     void isHostAsync().then(setInHost);
@@ -118,11 +114,12 @@ export function HomePage() {
     (async () => {
       try {
         const next = await readNextGameId();           // last allocated id (0 if no games)
+        const nowSec = Math.floor(Date.now() / 1000);
         const out: Listing[] = [];
         for (let id = 1n; id <= next; id++) {            // ids are 1-based, so `<= next` is correct
           const g = await readGame(id);
           if (g.host !== "0x0000000000000000000000000000000000000000") {
-            out.push({ id, game: g });
+            out.push({ id, game: g, state: effectiveState(g, nowSec) });
           }
         }
         if (!cancel) setGames(out.reverse());
@@ -183,8 +180,8 @@ export function HomePage() {
       )}
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {visible.map(({ id, game }, i) => (
-          <GameCard key={id.toString()} id={id} game={game} index={i} />
+        {visible.map(({ id, game, state }, i) => (
+          <GameCard key={id.toString()} id={id} game={game} state={state} index={i} />
         ))}
       </div>
     </div>

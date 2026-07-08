@@ -72,7 +72,15 @@ export function PreviewPage() {
         <CardHeader><CardTitle className="text-lg">Tickets — one per hue</CardTitle></CardHeader>
         <CardContent className="flex flex-wrap gap-5">
           {TICKET_HUES.map((hue, i) => (
-            <TicketGrid key={hue.name} grid={GRID} polledNumbers={DRAWN} hue={hue} highlightRow={i === 2 ? 0 : undefined} />
+            <TicketGrid
+              key={hue.name}
+              grid={GRID}
+              polledNumbers={DRAWN}
+              hue={hue}
+              highlightRow={i === 2 ? 0 : undefined}
+              overlay={i === 2 ? [{ label: "Top line winner", kind: "line" }] : undefined}
+              overlayMode="ribbon"
+            />
           ))}
         </CardContent>
       </Card>
@@ -85,9 +93,13 @@ export function PreviewPage() {
       </Card>
 
       <WinnerBanner
-        topLine={{ winner: ADDR, payout: 150_000_000_000n }}
-        middleLine={{ winner: ADDR, payout: 150_000_000_000n }}
-        fullhouse={{ winner: ADDR, payout: 500_000_000_000n, host: ADDR, hostFee: 50_000_000_000n }}
+        topLine={[
+          { line: 0, winner: ADDR, payout: 75_000_000_000n },
+          { line: 0, winner: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", payout: 75_000_000_000n },
+        ]}
+        middleLine={[{ line: 1, winner: ADDR, payout: 150_000_000_000n }]}
+        bottomLine={[]}
+        fullhouse={[{ winner: ADDR, payout: 500_000_000_000n, host: ADDR, hostFee: 50_000_000_000n }]}
       />
 
       <div className="h-[36rem]">

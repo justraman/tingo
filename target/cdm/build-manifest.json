@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-08T10:33:08.903Z",
+  "generatedAt": "2026-07-08T16:36:37.428Z",
   "contracts": [
     {
       "name": "@tambola/tambola",
@@ -12,7 +12,7 @@
       "artifactPath": "/Users/raman/Work/tambola-game/forge-out/Tambola.sol/Tambola.json",
       "sourcePath": "/Users/raman/Work/tambola-game/contracts/Tambola.sol",
       "contractName": "Tambola",
-      "bytecodeSize": 100945
+      "bytecodeSize": 123775
     }
   ]
 }

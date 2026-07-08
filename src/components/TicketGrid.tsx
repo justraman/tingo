@@ -7,17 +7,34 @@ export interface TicketOverlay {
   kind: "line" | "fullhouse";
 }
 
+function OverlayBadge({ overlay, size }: { overlay: TicketOverlay; size: "sm" | "md" }) {
+  return (
+    <span
+      className={cn(
+        "whitespace-nowrap rounded-full border font-bold uppercase tracking-widest backdrop-blur-md",
+        size === "sm" ? "px-2 py-0.5 text-[9px]" : "px-3 py-1 text-[11px]",
+        overlay.kind === "fullhouse"
+          ? "fullhouse-badge border-[hsl(var(--gold)/0.6)] bg-[hsl(var(--gold)/0.15)] text-[hsl(var(--gold))]"
+          : "border-white/25 bg-white/10 text-foreground/90",
+      )}
+    >
+      {overlay.label}
+    </span>
+  );
+}
+
 interface Props {
   grid: number[][];                 // 3 rows × 9 cols, 0 = empty
   polledNumbers?: number[];         // numbers already drawn — dab them
   highlightRow?: number;            // live game: gold ring on the row that won (0/1/2)
   struckRows?: number[];            // ended game: strike through the winning lines
-  overlay?: TicketOverlay[];        // ended game: one winner badge per title, stacked
+  overlay?: TicketOverlay[];        // one winner badge per title, stacked
+  overlayMode?: "cover" | "ribbon"; // cover dims the whole ticket (ended); ribbon keeps it playable (live)
   size?: "sm" | "md";
   hue?: TicketHue;                  // defaults to a deterministic hue from the grid
 }
 
-export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows, overlay, size = "md", hue }: Props) {
+export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows, overlay, overlayMode = "cover", size = "md", hue }: Props) {
   const th = (hue ?? hueFromGrid(grid)).hsl;
   const polled = new Set(polledNumbers);
   const struck = new Set(struckRows ?? []);
@@ -68,26 +85,21 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
           </div>
         ))}
       </div>
-      {overlay && overlay.length > 0 && (
+      {overlay && overlay.length > 0 && (overlayMode === "cover" ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] bg-black/40 backdrop-blur-[1.5px]">
           <div className={cn("flex -rotate-6 flex-col items-center", size === "sm" ? "gap-0.5" : "gap-1")}>
             {overlay.map((o) => (
-              <span
-                key={o.label}
-                className={cn(
-                  "whitespace-nowrap rounded-full border font-bold uppercase tracking-widest backdrop-blur-md",
-                  size === "sm" ? "px-2 py-0.5 text-[9px]" : "px-3 py-1 text-[11px]",
-                  o.kind === "fullhouse"
-                    ? "fullhouse-badge border-[hsl(var(--gold)/0.6)] bg-[hsl(var(--gold)/0.15)] text-[hsl(var(--gold))]"
-                    : "border-white/25 bg-white/10 text-foreground/90",
-                )}
-              >
-                {o.label}
-              </span>
+              <OverlayBadge key={o.label} overlay={o} size={size} />
             ))}
           </div>
         </div>
-      )}
+      ) : (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex -translate-y-1/2 flex-wrap items-center justify-center gap-1">
+          {overlay.map((o) => (
+            <OverlayBadge key={o.label} overlay={o} size={size} />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
