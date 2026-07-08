@@ -64,11 +64,50 @@ function GameCard({ id, game, index }: Listing & { index: number }) {
   );
 }
 
+function StateFilter({ games, filter, onChange }: {
+  games: Listing[];
+  filter: number | null;
+  onChange: (state: number | null) => void;
+}) {
+  const counts = games.reduce<Record<number, number>>((acc, { game }) => {
+    acc[game.state] = (acc[game.state] ?? 0) + 1;
+    return acc;
+  }, {});
+  const options: Array<{ state: number | null; label: string; count: number }> = [
+    { state: null, label: "All", count: games.length },
+    ...STATE_LABELS.map((label, state) => ({ state, label, count: counts[state] ?? 0 })),
+  ];
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.filter((o) => o.state === null || o.count > 0).map(({ state, label, count }) => {
+        const active = filter === state;
+        return (
+          <button
+            key={label}
+            type="button"
+            onClick={() => onChange(state)}
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              active
+                ? "border-white/25 bg-white/[0.12] text-foreground"
+                : "border-white/10 bg-transparent text-muted-foreground hover:bg-white/[0.06] hover:text-foreground/80"
+            }`}
+          >
+            {label}
+            <span className="tabular-nums opacity-60">{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function HomePage() {
   const [games, setGames] = useState<Listing[]>([]);
   const [inHost, setInHost] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [filter, setFilter] = useState<number | null>(null);
+  const visible = filter === null ? games : games.filter(({ game }) => game.state === filter);
 
   useEffect(() => {
     void isHostAsync().then(setInHost);
@@ -111,12 +150,10 @@ export function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="animate-rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Games</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            On-chain Tambola · {CHAIN.symbol} on Asset Hub
-          </p>
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight">Games</h1>
+        {!loading && !error && games.length > 0 && (
+          <StateFilter games={games} filter={filter} onChange={setFilter} />
+        )}
       </div>
 
       {loading && (
@@ -139,8 +176,14 @@ export function HomePage() {
         </div>
       )}
 
+      {!loading && !error && games.length > 0 && visible.length === 0 && (
+        <div className="glass animate-rise rounded-3xl py-12 text-center text-sm text-muted-foreground">
+          No {STATE_LABELS[filter!].toLowerCase()} games right now.
+        </div>
+      )}
+
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {games.map(({ id, game }, i) => (
+        {visible.map(({ id, game }, i) => (
           <GameCard key={id.toString()} id={id} game={game} index={i} />
         ))}
       </div>

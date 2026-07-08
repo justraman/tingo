@@ -326,6 +326,23 @@ contract TambolaTest is Test {
         assertEq(tambola.withdrawable(alice), 0);
     }
 
+    function test_drawNumber_rejectsAfterFullHouseWon() public {
+        uint256 gid = _createGame(4);
+        _buy(gid, alice, _layoutA());
+        _advanceToStart(gid);
+
+        for (uint256 i = 0; i < 90; i++) {
+            if (tambola.getGame(gid).state == ITambola.GameState.Won) break;
+            tambola.drawNumber(gid);
+            _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
+        }
+        assertEq(uint8(tambola.getGame(gid).state), uint8(ITambola.GameState.Won));
+
+        _advanceSeconds(tambola.DRAW_INTERVAL_SECONDS());
+        vm.expectRevert(bytes("ended"));
+        tambola.drawNumber(gid);
+    }
+
     function test_withdraw_rejectsWhenEmpty() public {
         vm.prank(alice);
         vm.expectRevert(bytes("nothing to withdraw"));

@@ -233,23 +233,30 @@ async function runDrawer(env: Env, startedAtMs: number) {
     const candidates = games.filter((g) => (g.state === 0 || g.state === 1) && g.ticketCount > 0);
     if (candidates.length === 0) return;
 
-    const lastDraw = new Map(candidates.map((g) => [g.id, g.lastDrawTime]));
+    const active = new Map(candidates.map((g) => [g.id, { startTime: g.startTime, lastDraw: g.lastDrawTime }]));
     const deadline = startedAtMs + DRAWER_BUDGET_MS;
 
-    while (Date.now() < deadline) {
+    while (Date.now() < deadline && active.size > 0) {
       const chainNow = await chainNowSeconds(unsafe);
-      for (const g of candidates) {
+      for (const [id, g] of active) {
         if (chainNow < g.startTime) continue;
-        if (chainNow < (lastDraw.get(g.id) ?? 0n) + interval) continue;
+        if (chainNow < g.lastDraw + interval) continue;
         try {
-          await submitDraw(unsafe, env, signer, address, g.id);
-          console.log(`drew for game ${g.id} as ${address}`);
+          await submitDraw(unsafe, env, signer, address, id);
+          console.log(`drew for game ${id} as ${address}`);
         } catch (e) {
-          console.error(`draw failed for game ${g.id}:`, e);
+          console.error(`draw failed for game ${id}:`, e);
         }
         // Success or failure, wait a full interval before this game's next
         // try — re-read chain time so the inclusion block's timestamp counts.
-        lastDraw.set(g.id, await chainNowSeconds(unsafe));
+        g.lastDraw = await chainNowSeconds(unsafe);
+        // A draw can end the game (full house, or all 90 drawn) — re-read the
+        // state and retire finished games so we never draw past a winner.
+        const fresh = await readContract<GameView>(unsafe, env, "getGame", [id]).catch(() => null);
+        if (fresh && fresh.state >= 2) {
+          active.delete(id);
+          console.log(`game ${id} reached final state ${fresh.state}; draws stopped`);
+        }
       }
       await sleep(1_000);
     }

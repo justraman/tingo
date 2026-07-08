@@ -3,7 +3,7 @@ out/
 .papi/
 forge-out/
 forge-cache/
-lib/
+/lib/
 .env
 .env.local
 .DS_Store

@@ -25,7 +25,7 @@ import {
 } from "@/lib/tambola/read";
 import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
-import { playNumber } from "@/lib/sound";
+import { playNumber, stopPlayback } from "@/lib/sound";
 import { useSoundStore } from "@/lib/store/sound";
 import { gridFromMasks } from "@/lib/tambola/encode";
 import { DRAW_INTERVAL_SECONDS, CHAIN } from "@/lib/chain/constants";
@@ -137,19 +137,22 @@ export function GameView({ id }: { id: string }) {
 
   // Subscribe to Tambola contract events scoped to this game.
   useEffect(() => {
+    let cancelled = false;
     let teardown: (() => void) | undefined;
     (async () => {
-      teardown = await subscribeEvents((e) => {
+      const unsub = await subscribeEvents((e) => {
         const evId = (e.args as any).gameId as bigint | undefined;
         if (evId !== gameId) return;
         switch (e.name) {
           case "TicketBought":
             void refreshTickets();
             break;
-          case "NumberDrawn":
+          case "NumberDrawn": {
+            const known = useGameStore.getState().byId[gameId.toString()]?.drawn.includes(e.args.number);
             appendDrawn(gameId, e.args.number);
-            void playNumber(e.args.number);
+            if (!known) void playNumber(e.args.number);
             break;
+          }
           case "LineWon":
             appendLineWinner(gameId, { line: e.args.line, winner: e.args.winner, payout: e.args.payout });
             break;
@@ -173,8 +176,17 @@ export function GameView({ id }: { id: string }) {
           readWithdrawable(selected).then(setWithdrawableAmt).catch(() => {});
         }
       });
+      // The await can outlive this effect (client connect takes seconds) — a
+      // subscription landing after cleanup must be released, or it plays
+      // sounds and burns a WS watcher for the rest of the session.
+      if (cancelled) { unsub(); return; }
+      teardown = unsub;
     })();
-    return () => { teardown?.(); };
+    return () => {
+      cancelled = true;
+      teardown?.();
+      stopPlayback();
+    };
   }, [gameId, selected, appendDrawn, appendLineWinner, setFinalWinner, setNoWinner, setGame, closeChat, refreshTickets]);
 
   const game = snap?.game;
