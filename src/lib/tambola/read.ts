@@ -14,6 +14,9 @@ import { toH160 } from "@parity/product-sdk-address";
 import { getClient } from "@/lib/chain/client";
 import { NATIVE_TO_ETH_RATIO, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
 import { TAMBOLA_ABI, type GameView, type TicketView } from "./abi";
+import type { PrizeBps } from "./prize";
+
+export type { PrizeBps } from "./prize";
 
 const weiToPlanck = (wei: bigint) => wei / NATIVE_TO_ETH_RATIO;
 
@@ -78,8 +81,6 @@ export const readIsRefundClaimed = (gameId: bigint, player: string) =>
 
 export const readWithdrawable = (account: string) =>
   readContract<bigint>("withdrawable", [toH160(account)]).then(weiToPlanck);
-
-export interface PrizeBps { lineBps: number; fullhouseBps: number; hostBps: number }
 
 // Contract constants — cache the successful read for the session.
 let prizeBpsCache: Promise<PrizeBps> | null = null;

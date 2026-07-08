@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { TicketGrid } from "@/components/TicketGrid";
+import { TicketGrid, type TicketOverlay } from "@/components/TicketGrid";
 import { NumberBoard } from "@/components/NumberBoard";
 import { Countdown } from "@/components/Countdown";
 import { TicketGenerator } from "@/components/TicketGenerator";
@@ -25,11 +25,12 @@ import {
 } from "@/lib/tambola/read";
 import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
+import { lineWinnersFromGame, fullhousePrizeFromGame, winningTickets, ZERO_ADDRESS } from "@/lib/tambola/prize";
 import { playNumber, stopPlayback } from "@/lib/sound";
 import { useSoundStore } from "@/lib/store/sound";
 import { gridFromMasks } from "@/lib/tambola/encode";
 import { DRAW_INTERVAL_SECONDS, CHAIN } from "@/lib/chain/constants";
-import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
+import { formatPlanck, shortenAddress, displayAddress, cn } from "@/lib/utils";
 import { hueFromSeed } from "@/lib/ticket-hues";
 import { Coins, Volume2, VolumeX, Zap } from "lucide-react";
 
@@ -106,16 +107,22 @@ export function GameView({ id }: { id: string }) {
         const drawn = await readDrawnNumbers(gameId);
         if (cancel) return;
         setGame(gameId, { game: g, drawn });
-        if (g.state === 2 && g.fullhouseWinner !== "0x0000000000000000000000000000000000000000") {
-          // Best we can do on cold-load — actual payouts must be backfilled via
-          // historical event scan; for now show the winner without an amount.
-          setFinalWinner(gameId, { winner: g.fullhouseWinner, payout: 0n, host: g.host, hostFee: 0n });
-        }
         if (g.state === 3) setNoWinner(gameId);
+        const anyWinner = [g.topLineWinner, g.middleLineWinner, g.bottomLineWinner, g.fullhouseWinner]
+          .some((w) => w !== ZERO_ADDRESS);
+        if (anyWinner) {
+          // Payouts are pure functions of pot + on-chain bps, so cold-load can
+          // reconstruct them without scanning historical events.
+          const bps = await readPrizeBps();
+          if (cancel) return;
+          for (const w of lineWinnersFromGame(g, bps)) appendLineWinner(gameId, w);
+          const fullhouse = fullhousePrizeFromGame(g, bps);
+          if (fullhouse) setFinalWinner(gameId, fullhouse);
+        }
       } catch (e) { console.error(e); }
     })();
     return () => { cancel = true; };
-  }, [gameId, setGame, setFinalWinner, setNoWinner]);
+  }, [gameId, setGame, appendLineWinner, setFinalWinner, setNoWinner]);
 
   // Tickets + my withdrawable whenever the wallet changes.
   useEffect(() => {
@@ -307,15 +314,16 @@ export function GameView({ id }: { id: string }) {
   const myHashes = new Set(myTickets.map((t) => t.hash));
   const otherTickets = allTickets.filter((t) => !myHashes.has(t.hash));
 
-  const polledMask = drawn.reduce((m, n) => m | (1n << BigInt(n - 1)), 0n);
-  const rowComplete = (mask: bigint) => mask !== 0n && (mask & polledMask) === mask;
-  const winRowFor = (t: TicketView): number | undefined => {
-    const masks = [t.topRowMask, t.middleRowMask, t.bottomRowMask];
-    for (const line of [0, 1, 2]) {
-      const w = lineWinner(line);
-      if (w && w.winner.toLowerCase() === t.owner.toLowerCase() && rowComplete(masks[line])) return line;
-    }
-    return undefined;
+  const winning = winningTickets(game, allTickets, drawn);
+  const wonRowsFor = (t: TicketView): number[] =>
+    [0, 1, 2].filter((line) => winning.lineTickets[line] === t.hash);
+  const isFullhouseTicket = (t: TicketView): boolean => winning.fullhouseTicket === t.hash;
+  const lineNames = ["Top line", "Middle line", "Bottom line"];
+  const overlayFor = (t: TicketView) => {
+    if (!ended) return undefined;
+    const wins: TicketOverlay[] = wonRowsFor(t).map((r) => ({ label: `${lineNames[r]} winner`, kind: "line" }));
+    if (isFullhouseTicket(t)) wins.push({ label: "Full house winner", kind: "fullhouse" as const });
+    return wins.length > 0 ? wins : undefined;
   };
 
   const stats = [
@@ -344,7 +352,7 @@ export function GameView({ id }: { id: string }) {
               )}
             </div>
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">Hosted by {shortenAddress(game.host)}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Hosted by {displayAddress(game.host)}</div>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {stats.map((s) => (
               <div key={s.label} className="glass-inset rounded-2xl px-4 py-3">
@@ -442,7 +450,9 @@ export function GameView({ id }: { id: string }) {
                   <TicketGrid
                     grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
                     polledNumbers={drawn}
-                    highlightRow={winRowFor(t)}
+                    highlightRow={ended ? undefined : wonRowsFor(t)[0]}
+                    struckRows={ended ? wonRowsFor(t) : undefined}
+                    overlay={overlayFor(t)}
                     hue={hueFromSeed(t.hash)}
                   />
                   <div className="font-mono text-xs text-muted-foreground">hash {shortenAddress(t.hash)}</div>
@@ -456,11 +466,13 @@ export function GameView({ id }: { id: string }) {
                   <TicketGrid
                     grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
                     polledNumbers={drawn}
-                    highlightRow={winRowFor(t)}
+                    highlightRow={ended ? undefined : wonRowsFor(t)[0]}
+                    struckRows={ended ? wonRowsFor(t) : undefined}
+                    overlay={overlayFor(t)}
                     size="sm"
                     hue={hueFromSeed(t.hash)}
                   />
-                  <div className="font-mono text-xs text-muted-foreground">{shortenAddress(t.owner)}</div>
+                  <div className="font-mono text-xs text-muted-foreground">{displayAddress(t.owner)}</div>
                 </div>
               ))}
             </CardContent>

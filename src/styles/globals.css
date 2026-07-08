@@ -123,6 +123,34 @@
     box-shadow: 0 0 0 1px hsl(var(--gold) / 0.55), 0 0 18px hsl(var(--gold) / 0.15);
   }
 
+  /* Full-house ticket: breathing gold aura + a light sweep passing over. */
+  .fullhouse-win {
+    border-color: hsl(var(--gold) / 0.5);
+    animation: fullhouse-glow 2.8s ease-in-out infinite;
+  }
+  .fullhouse-win::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(
+      115deg,
+      transparent 32%,
+      hsl(var(--gold) / 0.12) 46%,
+      hsl(0 0% 100% / 0.10) 50%,
+      hsl(var(--gold) / 0.12) 54%,
+      transparent 68%
+    );
+    background-size: 250% 100%;
+    animation: fullhouse-sheen 3.4s ease-in-out infinite;
+  }
+
+  .fullhouse-badge {
+    animation: fullhouse-badge-pulse 2.8s ease-in-out infinite;
+  }
+
   /* ---- Latest-draw ripple (plays once per mount) -------------------- */
 
   .ripple-once::after {
@@ -183,10 +211,47 @@
   50%      { opacity: 0.5; }
 }
 
+@keyframes fullhouse-glow {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.07),
+      0 0 0 1px hsl(var(--gold) / 0.35),
+      0 0 22px hsl(var(--gold) / 0.12),
+      0 12px 40px hsl(240 60% 1% / 0.6);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.07),
+      0 0 0 1px hsl(var(--gold) / 0.65),
+      0 0 42px hsl(var(--gold) / 0.3),
+      0 12px 40px hsl(240 60% 1% / 0.6);
+  }
+}
+
+@keyframes fullhouse-sheen {
+  0%   { background-position: 130% 0; }
+  60%  { background-position: -30% 0; }
+  100% { background-position: -30% 0; }
+}
+
+@keyframes fullhouse-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--gold) / 0); transform: scale(1); }
+  50%      { box-shadow: 0 0 18px hsl(var(--gold) / 0.35); transform: scale(1.05); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ripple-once::after, .animate-rise, .animate-fade, .animate-number-in,
-  .dab-in, .skeleton {
+  .dab-in, .skeleton, .fullhouse-win, .fullhouse-win::after, .fullhouse-badge {
     animation: none !important;
   }
   .glass-interactive, .glass-interactive:hover { transform: none; }
+  /* Static gold ring keeps the win state legible without motion. */
+  .fullhouse-win {
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.07),
+      0 0 0 1px hsl(var(--gold) / 0.5),
+      0 0 24px hsl(var(--gold) / 0.18),
+      0 12px 40px hsl(240 60% 1% / 0.6);
+  }
+  .fullhouse-win::after { content: none; }
 }

@@ -1,5 +1,5 @@
 import { Trophy, CircleDot } from "lucide-react";
-import { shortenAddress, formatPlanck } from "@/lib/utils";
+import { displayAddress, formatPlanck } from "@/lib/utils";
 import { CHAIN } from "@/lib/chain/constants";
 
 interface Props {
@@ -34,7 +34,7 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
                 <CircleDot className="h-3 w-3" />
                 {lineLabels[i]}
               </span>
-              <span className="font-mono text-foreground/90">{shortenAddress(l.winner)}</span>
+              <span className="font-mono text-foreground/90">{displayAddress(l.winner)}</span>
               <span className="text-muted-foreground">won {formatPlanck(l.payout, CHAIN.decimals, CHAIN.symbol)}</span>
             </div>
           ) : null,
@@ -47,12 +47,12 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
               </span>
               <div>
                 <div className="text-base font-semibold leading-tight">
-                  Full house — <span className="font-mono">{shortenAddress(fullhouse.winner)}</span>
+                  Full house — <span className="font-mono">{displayAddress(fullhouse.winner)}</span>
                   <span className="ml-2 text-[hsl(var(--gold))]">{formatPlanck(fullhouse.payout, CHAIN.decimals, CHAIN.symbol)}</span>
                 </div>
                 {fullhouse.host && fullhouse.hostFee !== undefined && (
                   <div className="text-xs text-muted-foreground">
-                    Host {shortenAddress(fullhouse.host)} earned {formatPlanck(fullhouse.hostFee, CHAIN.decimals, CHAIN.symbol)}
+                    Host {displayAddress(fullhouse.host)} earned {formatPlanck(fullhouse.hostFee, CHAIN.decimals, CHAIN.symbol)}
                   </div>
                 )}
               </div>
