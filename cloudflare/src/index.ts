@@ -166,7 +166,7 @@ async function announceMilestones(env: Env, games: Array<GameView & { id: bigint
       }
     }
   } finally {
-    lazyClient.disconnect();
+    try { lazyClient.disconnect(); } catch { /* already closed */ }
   }
 }
 

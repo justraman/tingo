@@ -25,11 +25,13 @@ import {
 } from "@/lib/tambola/read";
 import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
+import { playNumber } from "@/lib/sound";
+import { useSoundStore } from "@/lib/store/sound";
 import { gridFromMasks } from "@/lib/tambola/encode";
 import { DRAW_INTERVAL_SECONDS, CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
 import { hueFromSeed } from "@/lib/ticket-hues";
-import { Coins, Zap } from "lucide-react";
+import { Coins, Volume2, VolumeX, Zap } from "lucide-react";
 
 import type { TicketView } from "@/lib/tambola/abi";
 
@@ -59,6 +61,8 @@ export function GameView({ id }: { id: string }) {
   const setNoWinner = useGameStore((s) => s.setNoWinner);
 
   const closeChat = useChatStore((s) => s.close);
+  const soundMuted = useSoundStore((s) => s.muted);
+  const toggleSound = useSoundStore((s) => s.toggle);
 
   const [myTickets,  setMyTickets]  = useState<TicketView[]>([]);
   const [allTickets, setAllTickets] = useState<TicketView[]>([]);
@@ -144,6 +148,7 @@ export function GameView({ id }: { id: string }) {
             break;
           case "NumberDrawn":
             appendDrawn(gameId, e.args.number);
+            void playNumber(e.args.number);
             break;
           case "LineWon":
             appendLineWinner(gameId, { line: e.args.line, winner: e.args.winner, payout: e.args.payout });
@@ -365,7 +370,18 @@ export function GameView({ id }: { id: string }) {
 
         {game.state !== 0 && (
           <Card className="animate-rise" style={{ animationDelay: "80ms" }}>
-            <CardHeader><CardTitle className="text-lg">Drawn numbers</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-lg">Drawn numbers</CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={soundMuted ? "Unmute number call-outs" : "Mute number call-outs"}
+                onClick={toggleSound}
+              >
+                {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </Button>
+            </CardHeader>
             <CardContent>
               <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
             </CardContent>
