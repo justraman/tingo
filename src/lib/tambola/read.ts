@@ -78,3 +78,19 @@ export const readIsRefundClaimed = (gameId: bigint, player: string) =>
 
 export const readWithdrawable = (account: string) =>
   readContract<bigint>("withdrawable", [toH160(account)]).then(weiToPlanck);
+
+export interface PrizeBps { lineBps: number; fullhouseBps: number; hostBps: number }
+
+// Contract constants — cache the successful read for the session.
+let prizeBpsCache: Promise<PrizeBps> | null = null;
+export function readPrizeBps(): Promise<PrizeBps> {
+  if (!prizeBpsCache) {
+    prizeBpsCache = Promise.all([
+      readContract<number>("LINE_BPS"),
+      readContract<number>("FULLHOUSE_BPS"),
+      readContract<number>("HOST_BPS"),
+    ]).then(([lineBps, fullhouseBps, hostBps]) => ({ lineBps, fullhouseBps, hostBps }));
+    prizeBpsCache.catch(() => { prizeBpsCache = null; });
+  }
+  return prizeBpsCache;
+}

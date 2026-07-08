@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, CircleAlert } from "lucide-react";
+import { Check, CircleAlert, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { TxStatus } from "@/lib/tambola/write";
@@ -9,7 +9,8 @@ interface Props {
   action: string;             // e.g. "Buying ticket"
   status: TxStatus | "";
   error?: string;
-  onClose: () => void;        // dismiss — only offered once the tx has failed
+  success?: { title: string; message: string };
+  onClose: () => void;        // dismiss — only offered once the tx has failed or succeeded
 }
 
 const STEPS: { key: TxStatus; label: string }[] = [
@@ -25,26 +26,40 @@ function Spinner() {
   );
 }
 
-export function TxStatusModal({ open, action, status, error, onClose }: Props) {
+export function TxStatusModal({ open, action, status, error, success, onClose }: Props) {
   const failed = Boolean(error);
+  const succeeded = !failed && Boolean(success);
+  const dismissible = failed || succeeded;
   const currentIdx = STEPS.findIndex((s) => s.key === status);
 
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => { if (!next && failed) onClose(); }}>
+    <Dialog.Root open={open} onOpenChange={(next) => { if (!next && dismissible) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="animate-fade fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
         <Dialog.Content
-          onEscapeKeyDown={(e) => { if (!failed) e.preventDefault(); }}
-          onInteractOutside={(e) => { if (!failed) e.preventDefault(); }}
-          onClick={(e) => { if (failed && e.target === e.currentTarget) onClose(); }}
+          onEscapeKeyDown={(e) => { if (!dismissible) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (!dismissible) e.preventDefault(); }}
+          onClick={(e) => { if (dismissible && e.target === e.currentTarget) onClose(); }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 focus:outline-none"
         >
           <div className="glass-strong animate-rise w-full max-w-sm rounded-3xl p-6">
-          <Dialog.Title className="text-lg font-semibold leading-tight">
-            {failed ? "Transaction failed" : action}
+          <Dialog.Title className={cn("text-lg font-semibold leading-tight", succeeded && "text-center")}>
+            {failed ? "Transaction failed" : succeeded ? success!.title : action}
           </Dialog.Title>
 
-          {failed ? (
+          {succeeded ? (
+            <>
+              <Dialog.Description asChild>
+                <div className="mt-4 flex flex-col items-center gap-3 text-center">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.45)] bg-[hsl(var(--gold)/0.12)]">
+                    <Ticket className="h-6 w-6 text-[hsl(var(--gold))]" />
+                  </span>
+                  <p className="text-sm text-muted-foreground">{success!.message}</p>
+                </div>
+              </Dialog.Description>
+              <Button onClick={onClose} className="mt-5 w-full">Done</Button>
+            </>
+          ) : failed ? (
             <>
               <Dialog.Description asChild>
                 <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-red-400/25 bg-red-500/[0.07] p-4 text-sm text-red-200/90">

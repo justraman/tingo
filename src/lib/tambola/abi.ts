@@ -129,6 +129,18 @@ export const TAMBOLA_ABI = [
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
+  {
+    type: "function", name: "LINE_BPS", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint16" }],
+  },
+  {
+    type: "function", name: "FULLHOUSE_BPS", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint16" }],
+  },
+  {
+    type: "function", name: "HOST_BPS", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint16" }],
+  },
 
   // ---- events ----
   {

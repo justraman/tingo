@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { TicketGrid } from "@/components/TicketGrid";
 import { NumberBoard } from "@/components/NumberBoard";
 import { WinnerBanner } from "@/components/WinnerBanner";
+import { GameRules } from "@/components/GameRules";
 import { ChatPanel } from "@/components/ChatPanel";
 import { TxStatusModal } from "@/components/TxStatusModal";
 import { AccountButtonView } from "@/components/AccountButton";
@@ -44,10 +45,12 @@ function useMockChat() {
 
 export function PreviewPage() {
   useMockChat();
-  const [txDemo, setTxDemo] = useState<{ status: TxStatus | ""; error?: string } | null>(null);
+  const [txDemo, setTxDemo] = useState<{
+    status: TxStatus | ""; error?: string; success?: { title: string; message: string };
+  } | null>(null);
 
   useEffect(() => {
-    if (!txDemo || txDemo.error) return;
+    if (!txDemo || txDemo.error || txDemo.success) return;
     if (txDemo.status === "finalized") {
       const t = setTimeout(() => setTxDemo(null), 1200);
       return () => clearTimeout(t);
@@ -128,6 +131,13 @@ export function PreviewPage() {
             <Button variant="secondary" onClick={() => setTxDemo({ status: "", error: "Wrong ticket price: expected 1 PAS, got 0.5 PAS (contract reverted)" })}>
               Tx modal — error
             </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setTxDemo({ status: "finalized", success: { title: "Ticket purchased", message: "Your ticket is in the game — good luck!" } })}
+            >
+              Tx modal — success
+            </Button>
+            <GameRules shares={{ lineBps: 1500, fullhouseBps: 5000, hostBps: 500 }} />
           </div>
         </CardContent>
       </Card>
@@ -137,6 +147,7 @@ export function PreviewPage() {
         action="Buying ticket"
         status={txDemo?.status ?? ""}
         error={txDemo?.error}
+        success={txDemo?.success}
         onClose={() => setTxDemo(null)}
       />
     </div>

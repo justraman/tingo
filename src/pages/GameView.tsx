@@ -10,6 +10,7 @@ import { TicketGenerator } from "@/components/TicketGenerator";
 import { ChatPanel } from "@/components/ChatPanel";
 import { WalletStatus } from "@/components/WalletStatus";
 import { WinnerBanner } from "@/components/WinnerBanner";
+import { GameRules } from "@/components/GameRules";
 import { TxStatusModal } from "@/components/TxStatusModal";
 
 import { useAccounts } from "@/lib/chain/use-accounts";
@@ -21,6 +22,7 @@ import { useChatStore } from "@/lib/store/chat";
 import { getClient } from "@/lib/chain/client";
 import {
   readGame, readDrawnNumbers, readTickets, readTicketsByOwner, readIsRefundClaimed, readWithdrawable,
+  readPrizeBps, type PrizeBps,
 } from "@/lib/tambola/read";
 import { callBuyTicket, callClaimRefund, callDrawNumber, callWithdraw, type TxStatus } from "@/lib/tambola/write";
 import { subscribeEvents } from "@/lib/tambola/events";
@@ -71,11 +73,17 @@ export function GameView({ id }: { id: string }) {
   const [action, setAction] = useState<string>("");
   const [busy,   setBusy]   = useState<boolean>(false);
   const [error,  setError]  = useState<string>("");
+  const [success, setSuccess] = useState<{ title: string; message: string } | null>(null);
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const [prizeShares, setPrizeShares] = useState<PrizeBps | undefined>();
 
   useEffect(() => {
     const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    readPrizeBps().then(setPrizeShares).catch(() => { /* panel renders without shares */ });
   }, []);
 
   const refreshTickets = useCallback(async () => {
@@ -194,7 +202,7 @@ export function GameView({ id }: { id: string }) {
     bestBlock >= game.lastDrawBlock + BigInt(BLOCKS_BETWEEN_DRAWS) + WORKER_GRACE_BLOCKS;
 
   function beginTx(label: string) {
-    setError(""); setStatus("signing"); setAction(label); setBusy(true);
+    setError(""); setSuccess(null); setStatus("signing"); setAction(label); setBusy(true);
   }
 
   async function onBuy() {
@@ -217,6 +225,7 @@ export function GameView({ id }: { id: string }) {
         refreshTickets(),
         readGame(gameId).then((g) => setGame(gameId, { game: g })),
       ]);
+      setSuccess({ title: "Ticket purchased", message: "Your ticket is in the game — good luck!" });
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -325,12 +334,15 @@ export function GameView({ id }: { id: string }) {
               <h1 className="font-game text-2xl font-bold tracking-tight">Game #{gameId.toString()}</h1>
               <Badge variant={STATE_VARIANTS[game.state] ?? "outline"}>{STATE_LABELS[game.state]}</Badge>
             </div>
-            {game.state === 0 && (
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 backdrop-blur-xl">
-                <span className="text-xs text-muted-foreground">Starts in</span>
-                <Countdown startTime={game.startTime} className="text-sm" />
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <GameRules shares={prizeShares} />
+              {game.state === 0 && (
+                <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 backdrop-blur-xl">
+                  <span className="text-xs text-muted-foreground">Starts in</span>
+                  <Countdown startTime={game.startTime} className="text-sm" />
+                </div>
+              )}
+            </div>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">Hosted by {shortenAddress(game.host)}</div>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -368,12 +380,14 @@ export function GameView({ id }: { id: string }) {
           </div>
         )}
 
-        <Card className="animate-rise" style={{ animationDelay: "80ms" }}>
-          <CardHeader><CardTitle className="text-lg">Drawn numbers</CardTitle></CardHeader>
-          <CardContent>
-            <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
-          </CardContent>
-        </Card>
+        {game.state !== 0 && (
+          <Card className="animate-rise" style={{ animationDelay: "80ms" }}>
+            <CardHeader><CardTitle className="text-lg">Drawn numbers</CardTitle></CardHeader>
+            <CardContent>
+              <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
+            </CardContent>
+          </Card>
+        )}
 
         {canBuy && (
           <TicketGenerator
@@ -472,11 +486,12 @@ export function GameView({ id }: { id: string }) {
         )}
 
         <TxStatusModal
-          open={busy || Boolean(error)}
+          open={busy || Boolean(error) || Boolean(success)}
           action={action}
           status={status}
           error={error}
-          onClose={() => setError("")}
+          success={success ?? undefined}
+          onClose={() => { setError(""); setSuccess(null); }}
         />
       </div>
 
