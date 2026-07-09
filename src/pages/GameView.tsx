@@ -338,13 +338,13 @@ export function GameView({ id }: { id: string }) {
         <div className="glass animate-rise rounded-3xl p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <h1 className="font-game text-2xl font-bold tracking-tight">Game #{gameId.toString()}</h1>
+              <h1 className="font-display text-2xl font-bold tracking-tight">Game #{gameId.toString()}</h1>
               <Badge variant={STATE_VARIANTS[uiState] ?? "outline"}>{STATE_LABELS[uiState]}</Badge>
             </div>
             <div className="flex items-center gap-2">
               <GameRules shares={prizeShares} />
               {uiState === 0 && (
-                <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 backdrop-blur-xl">
+                <div className="flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--fill)] px-4 py-1.5 backdrop-blur-xl">
                   <span className="text-xs text-muted-foreground">Starts in</span>
                   <Countdown startTime={game.startTime} className="text-sm" />
                 </div>
@@ -372,7 +372,7 @@ export function GameView({ id }: { id: string }) {
         />
 
         {uiState === CANCELLED_STATE && (
-          <div className="animate-rise rounded-3xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-2xl">
+          <div className="animate-rise rounded-3xl border border-[var(--line)] bg-[var(--cell-empty)] p-6 backdrop-blur-2xl">
             <div className="text-lg font-semibold leading-tight">Game cancelled</div>
             <p className="mt-1.5 text-sm text-muted-foreground">
               No tickets were sold before the start time, so this game can never begin.
@@ -441,7 +441,7 @@ export function GameView({ id }: { id: string }) {
                     className={cn(
                       "cursor-pointer rounded-full px-4 py-1.5 text-sm font-medium transition-all",
                       tab === key
-                        ? "bg-white/[0.14] text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.15)]"
+                        ? "bg-[var(--fill-strong)] text-foreground shadow-[inset_0_1px_0_hsl(var(--foreground)/0.15)]"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -505,9 +505,9 @@ export function GameView({ id }: { id: string }) {
         )}
 
         {ended && withdrawable > 0n && (
-          <div className="animate-rise rounded-3xl border border-[hsl(162_40%_52%/0.25)] bg-[hsl(162_40%_52%/0.05)] p-6 backdrop-blur-2xl">
+          <div className="animate-rise rounded-3xl border border-[hsl(var(--ok)/0.3)] bg-[hsl(var(--ok)/0.06)] p-6 backdrop-blur-2xl">
             <div className="flex items-center gap-2 text-lg font-semibold leading-tight">
-              <Coins className="h-5 w-5 text-[hsl(162_40%_58%)]" />
+              <Coins className="h-5 w-5 text-[hsl(var(--ok-foreground))]" />
               You have winnings to withdraw
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">

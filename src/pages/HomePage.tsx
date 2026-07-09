@@ -7,6 +7,8 @@ import { readNextGameId, readGame } from "@/lib/tambola/read";
 import { CHAIN } from "@/lib/chain/constants";
 import { formatPlanck } from "@/lib/utils";
 import { AddressLabel } from "@/components/AddressLabel";
+import { useVibe } from "@/lib/store/vibe";
+import { cn } from "@/lib/utils";
 import { ArrowRight, Ticket, Trophy } from "lucide-react";
 import type { GameView } from "@/lib/tambola/abi";
 import { STATE_LABELS, STATE_VARIANTS, effectiveState } from "@/lib/tambola/state";
@@ -14,15 +16,18 @@ import { STATE_LABELS, STATE_VARIANTS, effectiveState } from "@/lib/tambola/stat
 interface Listing { id: bigint; game: GameView; state: number; }
 
 function GameCard({ id, game, state, index }: Listing & { index: number }) {
+  const vibe = useVibe();
   const sold = game.maxTickets > 0 ? game.ticketCount / game.maxTickets : 0;
+  // Vintage: pinned-card tilt, alternating by position.
+  const tilt = vibe === "vintage" ? (index % 2 === 0 ? -1 : 1) * (1 + (index % 3) * 0.4) : 0;
   return (
     <Link href={`/game/${id}`} className="block">
       <div
         className="glass glass-interactive animate-rise flex h-full cursor-pointer flex-col rounded-3xl p-6"
-        style={{ animationDelay: `${Math.min(index * 60, 400)}ms` }}
+        style={{ animationDelay: `${Math.min(index * 60, 400)}ms`, transform: tilt ? `rotate(${tilt}deg)` : undefined }}
       >
         <div className="flex items-center justify-between">
-          <span className="font-game text-lg font-bold tracking-tight">Game #{id.toString()}</span>
+          <span className="font-display text-lg font-bold tracking-tight">Game #{id.toString()}</span>
           <Badge variant={STATE_VARIANTS[state] ?? "outline"}>{STATE_LABELS[state]}</Badge>
         </div>
         <div className="mt-1 text-xs text-muted-foreground">Host <AddressLabel address={game.host} /></div>
@@ -45,9 +50,9 @@ function GameCard({ id, game, state, index }: Listing & { index: number }) {
             <span className="inline-flex items-center gap-1"><Ticket className="h-3 w-3" /> {game.ticketCount} / {game.maxTickets}</span>
             <span>{Math.round(sold * 100)}% sold</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--track)]">
             <div
-              className="h-full rounded-full bg-white/70 transition-[width] duration-700"
+              className="h-full rounded-full bg-[var(--track-fill)] transition-[width] duration-700"
               style={{ width: `${Math.max(sold * 100, 2)}%` }}
             />
           </div>
@@ -85,8 +90,8 @@ function StateFilter({ games, filter, onChange }: {
             onClick={() => onChange(state)}
             className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
               active
-                ? "border-white/25 bg-white/[0.12] text-foreground"
-                : "border-white/10 bg-transparent text-muted-foreground hover:bg-white/[0.06] hover:text-foreground/80"
+                ? "border-[var(--line-strong)] bg-[var(--fill-strong)] text-foreground"
+                : "border-[var(--line)] bg-transparent text-muted-foreground hover:bg-[var(--fill)] hover:text-foreground/80"
             }`}
           >
             {label}
@@ -148,7 +153,7 @@ export function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="animate-rise flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Games</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Games</h1>
         {!loading && !error && games.length > 0 && (
           <StateFilter games={games} filter={filter} onChange={setFilter} />
         )}
@@ -161,7 +166,7 @@ export function HomePage() {
       )}
 
       {!loading && error && (
-        <div className="glass animate-rise rounded-3xl p-6 text-center text-sm text-red-400">
+        <div className="glass animate-rise rounded-3xl p-6 text-center text-sm text-[hsl(var(--destructive))]">
           Couldn't reach the chain: {error}
         </div>
       )}

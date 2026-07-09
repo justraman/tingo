@@ -9,14 +9,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-foreground text-background hover:bg-foreground/90 shadow-[0_1px_8px_hsl(0_0%_100%/0.08),inset_0_1px_0_hsl(0_0%_100%/0.45)]",
+          "bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))] hover:opacity-90 shadow-[0_1px_8px_hsl(var(--foreground)/0.08),inset_0_1px_0_hsl(var(--foreground)/0.25)]",
         destructive:
-          "bg-destructive/80 text-destructive-foreground backdrop-blur-xl border border-red-400/30 hover:bg-destructive/90",
+          "bg-destructive/80 text-destructive-foreground backdrop-blur-xl border border-[hsl(var(--destructive)/0.4)] hover:bg-destructive/90",
         outline:
-          "border border-white/15 bg-white/[0.06] backdrop-blur-xl text-foreground hover:bg-white/[0.12] hover:border-white/25 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.12)]",
+          "border border-[var(--line-strong)] bg-[var(--fill)] backdrop-blur-xl text-foreground hover:bg-[var(--fill-hover)] hover:border-[var(--line-strong)] shadow-[inset_0_1px_0_hsl(var(--foreground)/0.12)]",
         secondary:
-          "bg-white/[0.08] backdrop-blur-xl border border-white/10 text-foreground hover:bg-white/[0.14] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.1)]",
-        ghost: "text-foreground/80 hover:bg-white/[0.08] hover:text-foreground",
+          "bg-[var(--fill)] backdrop-blur-xl border border-[var(--line)] text-foreground hover:bg-[var(--fill-hover)] shadow-[inset_0_1px_0_hsl(var(--foreground)/0.1)]",
+        ghost: "text-foreground/80 hover:bg-[var(--fill-hover)] hover:text-foreground",
         link: "text-foreground underline-offset-4 hover:underline",
       },
       size: {

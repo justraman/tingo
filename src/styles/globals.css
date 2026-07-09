@@ -2,10 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark-only glass theme. Flat surfaces — no gradients. Chrome is monochrome;
-   color appears only on ticket number cells and a few accents. */
+/* Three vibes share one token contract. `data-vibe` on <html> (set by
+   src/lib/store/vibe.ts) selects which set is live, re-skinning the whole app.
+   Colors ending in a bare "H S% L%" triple are consumed via hsl(var(--x));
+   alpha-carrying surface/line/fill tokens are consumed as var(--x) directly. */
 @layer base {
-  :root {
+  :root, [data-vibe="glass"] {
     --background:           240 10%  2.5%;
     --foreground:           220 15% 96%;
     --card:                 240  8%  6%;
@@ -23,15 +25,142 @@
     --border:               240  6% 15%;
     --input:                240  6% 17%;
     --ring:                   0  0% 70%;
-    --gold: 42 55% 62%;
+    --gold:                  42 55% 62%;
+
+    --brand:                  0  0% 96%;
+    --brand-foreground:     240 10%  6%;
+    --spark:                 42 55% 62%;
+    --ok:                   162 40% 55%;
+    --ok-foreground:        162 40% 62%;
+
+    --fill:        hsl(0 0% 100% / 0.06);
+    --fill-hover:  hsl(0 0% 100% / 0.12);
+    --fill-strong: hsl(0 0% 100% / 0.10);
+    --line:        hsl(0 0% 100% / 0.10);
+    --line-strong: hsl(0 0% 100% / 0.22);
+    --line-faint:  hsl(0 0% 100% / 0.06);
+    --ink-faint:   hsl(0 0% 100% / 0.25);
+    --cell-empty:  hsl(0 0% 100% / 0.03);
+    --on-cell:     hsl(0 0% 0% / 0.75);
+    --cell-ring:   hsl(0 0% 100% / 0.6);
+    --track:       hsl(0 0% 100% / 0.07);
+    --track-fill:  hsl(0 0% 100% / 0.70);
+    --scrim:       hsl(0 0% 0% / 0.40);
+    --sel:         hsl(0 0% 100% / 0.20);
+
+    --font-body:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Inter, system-ui, sans-serif;
+    --font-num:     ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    --display-weight: 700;
+    --display-spacing: -0.02em;
+    --display-transform: none;
+
     --radius: 1rem;
+  }
+
+  [data-vibe="arcade"] {
+    --background:           253 43%  4%;
+    --foreground:           252 100% 97%;
+    --card:                 251 33% 10%;
+    --card-foreground:      252 100% 97%;
+    --primary:                0  0% 96%;
+    --primary-foreground:   253 43%  4%;
+    --secondary:            251 25% 16%;
+    --secondary-foreground: 252 100% 97%;
+    --muted:                251 20% 14%;
+    --muted-foreground:     248 22% 72%;
+    --accent:               251 25% 18%;
+    --accent-foreground:    252 100% 97%;
+    --destructive:            0 70% 60%;
+    --destructive-foreground: 0  0% 98%;
+    --border:               251 20% 22%;
+    --input:                251 20% 24%;
+    --ring:                 338 100% 65%;
+    --gold:                  46 100% 60%;
+
+    --brand:                338 100% 59%;
+    --brand-foreground:     253 43%  4%;
+    --spark:                188 100% 57%;
+    --ok:                   154 90% 59%;
+    --ok-foreground:        154 90% 65%;
+
+    --fill:        hsl(0 0% 100% / 0.06);
+    --fill-hover:  hsl(0 0% 100% / 0.12);
+    --fill-strong: hsl(0 0% 100% / 0.10);
+    --line:        hsl(0 0% 100% / 0.10);
+    --line-strong: hsl(0 0% 100% / 0.24);
+    --line-faint:  hsl(0 0% 100% / 0.06);
+    --ink-faint:   hsl(0 0% 100% / 0.30);
+    --cell-empty:  hsl(0 0% 100% / 0.04);
+    --on-cell:     hsl(253 43% 4% / 0.95);
+    --cell-ring:   hsl(0 0% 100% / 0.9);
+    --track:       hsl(0 0% 100% / 0.08);
+    --track-fill:  hsl(338 100% 59%);
+    --scrim:       hsl(253 43% 4% / 0.72);
+    --sel:         hsl(338 100% 59% / 0.35);
+
+    --font-body:    "Space Grotesk", system-ui, sans-serif;
+    --font-display: "Bungee", "Space Grotesk", system-ui, sans-serif;
+    --font-num:     "Space Grotesk", ui-monospace, monospace;
+    --display-weight: 400;
+    --display-spacing: 0.3px;
+    --display-transform: none;
+  }
+
+  [data-vibe="vintage"] {
+    --background:            42 44% 83%;
+    --foreground:            40 11% 18%;
+    --card:                  43 55% 92%;
+    --card-foreground:       40 11% 18%;
+    --primary:               11 56% 51%;
+    --primary-foreground:    44 55% 92%;
+    --secondary:             44 45% 89%;
+    --secondary-foreground:  40 11% 18%;
+    --muted:                 44 40% 88%;
+    --muted-foreground:      38 17% 41%;
+    --accent:                43 40% 86%;
+    --accent-foreground:     40 11% 18%;
+    --destructive:            4 60% 46%;
+    --destructive-foreground: 44 55% 92%;
+    --border:                43 33% 71%;
+    --input:                 43 26% 62%;
+    --ring:                  11 56% 51%;
+    --gold:                  39 67% 55%;
+
+    --brand:                 11 56% 51%;
+    --brand-foreground:      44 55% 92%;
+    --spark:                125 17% 37%;
+    --ok:                   125 17% 37%;
+    --ok-foreground:        125 20% 30%;
+
+    --fill:        hsl(40 30% 35% / 0.08);
+    --fill-hover:  hsl(40 30% 35% / 0.15);
+    --fill-strong: hsl(40 30% 35% / 0.12);
+    --line:        hsl(40 22% 45% / 0.55);
+    --line-strong: hsl(40 22% 40% / 0.80);
+    --line-faint:  hsl(40 22% 45% / 0.35);
+    --ink-faint:   hsl(42 20% 45% / 0.95);
+    --cell-empty:  hsl(38 25% 40% / 0.10);
+    --on-cell:     hsl(44 55% 95%);
+    --cell-ring:   hsl(11 56% 51% / 0.9);
+    --track:       hsl(40 30% 40% / 0.18);
+    --track-fill:  hsl(125 17% 37%);
+    --scrim:       hsl(42 30% 80% / 0.65);
+    --sel:         hsl(11 56% 51% / 0.28);
+
+    --font-body:    Georgia, "Times New Roman", serif;
+    --font-display: "Playfair Display", Georgia, serif;
+    --font-num:     "Special Elite", ui-monospace, monospace;
+    --display-weight: 900;
+    --display-spacing: 0.2px;
+    --display-transform: none;
+
+    --radius: 0.5rem;
   }
 
   * { @apply border-border; }
 
-  html {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
-  }
+  html { font-family: var(--font-body); }
 
   body {
     @apply bg-background text-foreground antialiased;
@@ -44,21 +173,35 @@
     box-shadow: none;
   }
 
-  ::selection { background: hsl(0 0% 100% / 0.2); }
+  ::selection { background: var(--sel); }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: hsl(0 0% 100% / 0.12);
+    background: var(--line-strong);
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
-  ::-webkit-scrollbar-thumb:hover { background-color: hsl(0 0% 100% / 0.2); }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--line-strong); }
 }
 
 @layer components {
-  /* ---- Glass surfaces (flat fills, specular top edge) --------------- */
+  /* ---- Typography helpers ------------------------------------------- */
+
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: var(--display-weight);
+    letter-spacing: var(--display-spacing);
+    text-transform: var(--display-transform);
+  }
+  .font-body { font-family: var(--font-body); }
+  .font-game {
+    font-family: var(--font-num);
+    font-feature-settings: "tnum";
+  }
+
+  /* ---- Surfaces ------------------------------------------------------ */
 
   .glass {
     background: hsl(240 20% 55% / 0.05);
@@ -80,8 +223,7 @@
       0 16px 48px hsl(240 60% 1% / 0.65);
   }
 
-  /* Popovers float over live content (balances, tickets) — near-opaque so
-     nothing bleeds through, unlike the see-through glass surfaces. */
+  /* Popovers float over live content — near-opaque so nothing bleeds through. */
   .glass-popover {
     background: hsl(240 8% 7% / 0.97);
     -webkit-backdrop-filter: blur(32px) saturate(1.4);
@@ -110,7 +252,104 @@
       0 18px 56px hsl(240 60% 1% / 0.7);
   }
 
-  /* ---- Backdrop: flat dark + film grain ----------------------------- */
+  /* Arcade: neon glass panels, pink hover glow. */
+  [data-vibe="arcade"] .glass {
+    background: hsl(251 33% 10% / 0.72);
+    border: 1px solid hsl(0 0% 100% / 0.09);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05), 0 12px 40px hsl(253 60% 1% / 0.6);
+  }
+  [data-vibe="arcade"] .glass-strong {
+    background: hsl(255 40% 5% / 0.82);
+    border: 1px solid hsl(0 0% 100% / 0.08);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06), 0 16px 48px hsl(253 60% 1% / 0.66);
+  }
+  [data-vibe="arcade"] .glass-popover {
+    background: hsl(255 33% 8% / 0.97);
+    border: 1px solid hsl(0 0% 100% / 0.10);
+    box-shadow: 0 16px 48px hsl(253 60% 1% / 0.7);
+  }
+  [data-vibe="arcade"] .glass-inset {
+    background: hsl(255 45% 3% / 0.5);
+    border: 1px solid hsl(0 0% 100% / 0.05);
+    box-shadow: inset 0 2px 10px hsl(0 0% 0% / 0.45);
+  }
+  [data-vibe="arcade"] .glass-interactive:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--brand) / 0.55);
+    box-shadow: 0 0 0 1px hsl(var(--brand) / 0.35), 0 18px 56px hsl(253 60% 1% / 0.7),
+                0 0 34px hsl(var(--brand) / 0.18);
+  }
+
+  /* Vintage: solid paper cards, printed drop shadow, no blur. */
+  [data-vibe="vintage"] .glass {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 3px 0 hsl(40 30% 45% / 0.12);
+  }
+  [data-vibe="vintage"] .glass-strong {
+    background: hsl(42 44% 83% / 0.94);
+    border: 1px solid hsl(var(--border));
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 3px 0 hsl(40 30% 45% / 0.12);
+  }
+  [data-vibe="vintage"] .glass-popover {
+    background: hsl(44 55% 94%);
+    border: 1px solid hsl(var(--input));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 12px 30px hsl(40 30% 30% / 0.28);
+  }
+  [data-vibe="vintage"] .glass-inset {
+    background: hsl(43 40% 86%);
+    border: 1px solid hsl(var(--border));
+    box-shadow: inset 0 1px 3px hsl(40 30% 40% / 0.15);
+  }
+  [data-vibe="vintage"] .glass-interactive:hover {
+    transform: translateY(-2px) rotate(-0.4deg);
+    border-color: hsl(40 26% 55%);
+    box-shadow: 0 6px 0 hsl(40 30% 45% / 0.16);
+  }
+
+  /* ---- Ticket / board number cells ---------------------------------- */
+  /* Centralized so all three vibes theme through one set of classes. The
+     dabbed cell's hue comes from --cell-hue (set inline per number/vibe),
+     falling back to the ticket paper hue --th. */
+
+  .cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .cell-empty { background: var(--cell-empty); }
+  .cell-open  { background: var(--fill); color: hsl(var(--foreground) / 0.9); }
+  .cell-dab   { background: hsl(var(--cell-hue, var(--th, 0 0% 100%)) / 0.9); color: var(--on-cell); }
+
+  [data-vibe="arcade"] .cell-dab {
+    background: hsl(var(--cell-hue, var(--brand)));
+    box-shadow: 0 0 14px hsl(var(--cell-hue, var(--brand)) / 0.55),
+                inset 0 -2px 0 hsl(0 0% 0% / 0.25);
+  }
+  [data-vibe="vintage"] .cell-open {
+    background: hsl(var(--card));
+    border: 1px solid var(--line-strong);
+    color: hsl(var(--foreground));
+  }
+  [data-vibe="vintage"] .cell-dab {
+    background: hsl(var(--brand));
+    color: var(--on-cell);
+    box-shadow: 0 2px 0 hsl(11 56% 28% / 0.35);
+    transform: rotate(-3deg);
+  }
+
+  /* ---- Backdrop ----------------------------------------------------- */
 
   .ambient {
     position: fixed;
@@ -125,9 +364,102 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
+  /* Arcade: twin neon glows + a masked grid (reusing the noise layer). */
+  [data-vibe="arcade"] .ambient {
+    background:
+      radial-gradient(1100px 620px at 22% -8%, hsl(var(--brand) / 0.16), transparent 60%),
+      radial-gradient(1000px 560px at 88% 108%, hsl(var(--spark) / 0.14), transparent 60%),
+      hsl(var(--background));
+  }
+  [data-vibe="arcade"] .ambient-noise {
+    opacity: 0.5;
+    background-image:
+      linear-gradient(hsl(0 0% 100% / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(0 0% 100% / 0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, #000, transparent 92%);
+    mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, #000, transparent 92%);
+  }
+
+  /* Vintage: printed dot grain + soft paper vignette. */
+  [data-vibe="vintage"] .ambient {
+    background:
+      radial-gradient(120% 80% at 50% -10%, hsl(48 60% 96% / 0.6), transparent 60%),
+      radial-gradient(100% 70% at 50% 120%, hsl(35 40% 30% / 0.14), transparent 60%),
+      hsl(var(--background));
+  }
+  [data-vibe="vintage"] .ambient-noise {
+    opacity: 1;
+    background-image: radial-gradient(hsl(35 30% 30% / 0.06) 1px, transparent 1px);
+    background-size: 7px 7px;
+  }
+
+  /* ---- Latest-draw ball --------------------------------------------- */
+
+  .draw-ball {
+    background:
+      radial-gradient(circle at 30% 24%, hsl(0 0% 100% / 0.30), transparent 42%),
+      radial-gradient(circle at 68% 84%, hsl(0 0% 100% / 0.08), transparent 52%),
+      hsl(0 0% 100% / 0.05);
+    backdrop-filter: blur(10px) saturate(1.5);
+    -webkit-backdrop-filter: blur(10px) saturate(1.5);
+    border: 1px solid hsl(0 0% 100% / 0.22);
+    box-shadow:
+      inset 0 10px 18px hsl(0 0% 100% / 0.10),
+      inset 0 -14px 24px hsl(0 0% 100% / 0.05),
+      inset 0 -2px 6px hsl(0 0% 100% / 0.22),
+      0 18px 44px hsl(240 60% 1% / 0.55);
+    animation: liquid-idle 7s ease-in-out infinite;
+  }
+  .draw-ball-number {
+    color: hsl(0 0% 100% / 0.95);
+    text-shadow: 0 1px 6px hsl(240 60% 4% / 0.6);
+  }
+
+  /* Arcade: solid neon lottery ball, hue from --cell-hue (the drawn number). */
+  [data-vibe="arcade"] .draw-ball {
+    background: radial-gradient(circle at 34% 28%, #fff, hsl(var(--cell-hue, var(--brand))) 52%, hsl(0 0% 0% / 0.55) 128%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 2px solid hsl(0 0% 100% / 0.5);
+    box-shadow: 0 0 36px 6px hsl(var(--cell-hue, var(--brand)) / 0.7),
+                inset 0 -12px 22px hsl(0 0% 0% / 0.4),
+                inset 0 9px 16px hsl(0 0% 100% / 0.45);
+    animation: none;
+  }
+  [data-vibe="arcade"] .draw-ball-number {
+    color: hsl(var(--background));
+    text-shadow: 0 2px 0 hsl(0 0% 100% / 0.4);
+  }
+
+  /* Vintage: wax stamp — printed red disc, double cream ring, tilted. */
+  [data-vibe="vintage"] .draw-ball {
+    background: radial-gradient(circle at 36% 30%, hsl(11 56% 60%), hsl(var(--brand)) 60%, hsl(11 50% 34%) 120%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 3px double hsl(44 55% 92%);
+    box-shadow: 0 5px 0 hsl(11 50% 28% / 0.35), inset 0 -8px 14px hsl(0 0% 0% / 0.18);
+    transform: rotate(-4deg);
+    animation: none;
+  }
+  [data-vibe="vintage"] .draw-ball-number {
+    color: hsl(44 55% 92%);
+    text-shadow: none;
+  }
+
+  /* ---- Marquee bulbs (arcade header) -------------------------------- */
+
+  .bulb {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    animation: bulb-blink 1.1s ease-in-out infinite;
+  }
+
   /* ---- Ticket & win effects ----------------------------------------- */
 
   .dab-in { animation: dab-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  [data-vibe="vintage"] .dab-in { animation: stamp-in 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
   .row-win {
     position: relative;
@@ -135,7 +467,6 @@
     box-shadow: 0 0 0 1px hsl(var(--gold) / 0.55), 0 0 18px hsl(var(--gold) / 0.15);
   }
 
-  /* Full-house ticket: breathing gold aura + a light sweep passing over. */
   .fullhouse-win {
     border-color: hsl(var(--gold) / 0.5);
     animation: fullhouse-glow 2.8s ease-in-out infinite;
@@ -159,34 +490,7 @@
     animation: fullhouse-sheen 3.4s ease-in-out infinite;
   }
 
-  .fullhouse-badge {
-    animation: fullhouse-badge-pulse 2.8s ease-in-out infinite;
-  }
-
-  /* ---- Latest-draw ball ---------------------------------------------- */
-
-  /* A colorless water drop: refractive glass over the backdrop, specular
-     highlight up-left, caustic rim light at the bottom edge, and a slow
-     border-radius morph so the surface never sits still. */
-  .draw-ball {
-    background:
-      radial-gradient(circle at 30% 24%, hsl(0 0% 100% / 0.30), transparent 42%),
-      radial-gradient(circle at 68% 84%, hsl(0 0% 100% / 0.08), transparent 52%),
-      hsl(0 0% 100% / 0.05);
-    backdrop-filter: blur(10px) saturate(1.5);
-    -webkit-backdrop-filter: blur(10px) saturate(1.5);
-    border: 1px solid hsl(0 0% 100% / 0.22);
-    box-shadow:
-      inset 0 10px 18px hsl(0 0% 100% / 0.10),
-      inset 0 -14px 24px hsl(0 0% 100% / 0.05),
-      inset 0 -2px 6px hsl(0 0% 100% / 0.22),
-      0 18px 44px hsl(240 60% 1% / 0.55);
-    animation: liquid-idle 7s ease-in-out infinite;
-  }
-  .draw-ball-number {
-    color: hsl(0 0% 100% / 0.95);
-    text-shadow: 0 1px 6px hsl(240 60% 4% / 0.6);
-  }
+  .fullhouse-badge { animation: fullhouse-badge-pulse 2.8s ease-in-out infinite; }
 
   /* ---- Latest-draw ripple (plays once per mount) -------------------- */
 
@@ -195,24 +499,20 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    border: 1px solid hsl(0 0% 100% / 0.4);
+    border: 1px solid var(--cell-ring);
     animation: ripple 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
     pointer-events: none;
   }
 
-  /* ---- Motion utilities ---------------------------------------------- */
+  /* ---- Motion utilities --------------------------------------------- */
 
   .animate-rise      { animation: rise 450ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .animate-fade      { animation: fade 350ms ease-out both; }
   .animate-number-in { animation: number-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-
-  .font-game {
-    font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
-    font-feature-settings: "tnum";
-  }
+  .animate-shake     { animation: screen-shake 460ms ease; }
 
   .skeleton {
-    background: hsl(0 0% 100% / 0.05);
+    background: var(--fill);
     animation: skeleton-pulse 1.8s ease-in-out infinite;
     border-radius: 0.75rem;
   }
@@ -228,7 +528,6 @@
     filter: drop-shadow(0 4px 12px hsl(240 60% 1% / 0.5));
   }
 
-  /* Single reactions float up inside the chat, live-stream style. */
   .emoji-float {
     position: absolute;
     bottom: 0.5rem;
@@ -254,6 +553,12 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+@keyframes stamp-in {
+  0%   { opacity: 0; transform: scale(0.4) rotate(-16deg); }
+  65%  { transform: scale(1.14) rotate(-3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-3deg); }
+}
+
 @keyframes number-in {
   0%   { opacity: 0; transform: scale(1.5); filter: blur(10px); }
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
@@ -269,6 +574,20 @@
   25%      { border-radius: 52% 48% 47% 53% / 48% 53% 47% 52%; }
   50%      { border-radius: 48% 52% 53% 47% / 52% 47% 53% 48%; }
   75%      { border-radius: 51% 49% 48% 52% / 47% 52% 48% 53%; }
+}
+
+@keyframes bulb-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.22; }
+}
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  18%      { transform: translate(-6px, 3px) rotate(-0.4deg); }
+  36%      { transform: translate(6px, -3px) rotate(0.4deg); }
+  54%      { transform: translate(-4px, 2px); }
+  72%      { transform: translate(4px, -2px); }
+  90%      { transform: translate(-2px, 1px); }
 }
 
 @keyframes emoji-float-up {
@@ -319,12 +638,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ripple-once::after, .animate-rise, .animate-fade, .animate-number-in,
-  .dab-in, .skeleton, .fullhouse-win, .fullhouse-win::after, .fullhouse-badge {
+  .dab-in, .skeleton, .fullhouse-win, .fullhouse-win::after, .fullhouse-badge,
+  .animate-shake, .bulb, .draw-ball {
     animation: none !important;
   }
   .glass-interactive, .glass-interactive:hover { transform: none; }
   .emoji-drop, .emoji-float { display: none; }
-  /* Static gold ring keeps the win state legible without motion. */
   .fullhouse-win {
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.07),

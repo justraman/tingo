@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import { hueFromGrid, type TicketHue } from "@/lib/ticket-hues";
+import { useVibe, type Vibe } from "@/lib/store/vibe";
+import { cellHueStyle } from "@/lib/vibe-colors";
 
 export interface TicketOverlay {
   label: string;
@@ -15,7 +17,7 @@ function OverlayBadge({ overlay, size }: { overlay: TicketOverlay; size: "sm" | 
         size === "sm" ? "px-2 py-0.5 text-[9px]" : "px-3 py-1 text-[11px]",
         overlay.kind === "fullhouse"
           ? "fullhouse-badge border-[hsl(var(--gold)/0.6)] bg-[hsl(var(--gold)/0.15)] text-[hsl(var(--gold))]"
-          : "border-white/25 bg-white/10 text-foreground/90",
+          : "border-[var(--line-strong)] bg-[var(--fill-strong)] text-foreground/90",
       )}
     >
       {overlay.label}
@@ -32,9 +34,12 @@ interface Props {
   overlayMode?: "cover" | "ribbon"; // cover dims the whole ticket (ended); ribbon keeps it playable (live)
   size?: "sm" | "md";
   hue?: TicketHue;                  // defaults to a deterministic hue from the grid
+  vibe?: Vibe;                      // override the active vibe (used by the vibe-preview cards)
 }
 
-export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows, overlay, overlayMode = "cover", size = "md", hue }: Props) {
+export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows, overlay, overlayMode = "cover", size = "md", hue, vibe: vibeProp }: Props) {
+  const activeVibe = useVibe();
+  const vibe = vibeProp ?? activeVibe;
   const th = (hue ?? hueFromGrid(grid)).hsl;
   const polled = new Set(polledNumbers);
   const struck = new Set(struckRows ?? []);
@@ -62,17 +67,15 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
               return (
                 <div
                   key={c}
+                  style={isDabbed ? cellHueStyle(vibe, v) : undefined}
                   className={cn(
-                    "font-game flex items-center justify-center font-bold tabular-nums",
+                    "cell",
                     cellBase,
                     v === 0
-                      ? "bg-white/[0.03]"
+                      ? "cell-empty"
                       : isDabbed
-                        ? cn(
-                            "dab-in bg-[hsl(var(--th)/0.9)] text-black/75",
-                            v === latest && "ring-1 ring-white/60",
-                          )
-                        : "bg-white/[0.06] text-foreground/90",
+                        ? cn("cell-dab dab-in", v === latest && "ring-1 ring-[var(--cell-ring)]")
+                        : "cell-open",
                   )}
                 >
                   {v === 0 ? "" : v}
@@ -86,7 +89,7 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
         ))}
       </div>
       {overlay && overlay.length > 0 && (overlayMode === "cover" ? (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] bg-black/40 backdrop-blur-[1.5px]">
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] bg-[var(--scrim)] backdrop-blur-[1.5px]">
           <div className={cn("flex -rotate-6 flex-col items-center", size === "sm" ? "gap-0.5" : "gap-1")}>
             {overlay.map((o) => (
               <OverlayBadge key={o.label} overlay={o} size={size} />

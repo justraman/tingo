@@ -4,6 +4,7 @@ import { useAccounts } from "@/lib/chain/use-accounts";
 import { useBalance } from "@/lib/chain/use-balance";
 import { useWalletStore } from "@/lib/store/wallet";
 import { getPrimaryUsername } from "@/lib/host/identity";
+import { VibePicker } from "@/components/VibePicker";
 import { readWithdrawable } from "@/lib/tambola/read";
 import { CHAIN } from "@/lib/chain/constants";
 import { formatPlanck, shortenAddress, cn } from "@/lib/utils";
@@ -64,9 +65,9 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex h-9 cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] pl-3 pr-2.5 text-sm backdrop-blur-xl transition-colors hover:bg-white/[0.12]"
+        className="flex h-9 cursor-pointer items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--fill)] pl-3 pr-2.5 text-sm backdrop-blur-xl transition-colors hover:bg-[var(--fill-hover)]"
       >
-        <span className="h-2 w-2 rounded-full bg-[hsl(162_40%_55%)]" />
+        <span className="h-2 w-2 rounded-full bg-[hsl(var(--ok))]" />
         <span className="hidden max-w-32 truncate font-medium sm:inline">{label}</span>
         <span className="font-game font-semibold tabular-nums text-foreground/90">
           {balance === null ? "…" : compactPlanck(balance)} <span className="font-normal text-muted-foreground">{CHAIN.symbol}</span>
@@ -82,13 +83,13 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
             type="button"
             onClick={() => void copyAddress()}
             title="Copy address"
-            className="glass-inset mt-2 flex w-full cursor-pointer items-center gap-2 rounded-xl p-2.5 text-left transition-colors hover:bg-white/[0.04]"
+            className="glass-inset mt-2 flex w-full cursor-pointer items-center gap-2 rounded-xl p-2.5 text-left transition-colors hover:bg-[var(--fill)]"
           >
             <span className="min-w-0 flex-1 break-all font-mono text-xs text-muted-foreground">
               {address}
             </span>
             {copied
-              ? <Check className="h-4 w-4 shrink-0 text-[hsl(162_40%_58%)]" />
+              ? <Check className="h-4 w-4 shrink-0 text-[hsl(var(--ok-foreground))]" />
               : <Copy className="h-4 w-4 shrink-0 text-muted-foreground" />}
           </button>
 
@@ -108,7 +109,7 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
           )}
 
           {accounts.length > 1 && (
-            <div className="mt-3 border-t border-white/[0.07] pt-3">
+            <div className="mt-3 border-t border-[var(--line-faint)] pt-3">
               <div className="mb-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Accounts</div>
               <div className="flex flex-col gap-1">
                 {accounts.map((a) => (
@@ -119,8 +120,8 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
                     className={cn(
                       "flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
                       a.address === address
-                        ? "bg-white/[0.1] text-foreground"
-                        : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+                        ? "bg-[var(--fill-strong)] text-foreground"
+                        : "text-muted-foreground hover:bg-[var(--fill)] hover:text-foreground",
                     )}
                   >
                     <span className="truncate">{a.name ?? shortenAddress(a.address, 6, 4)}</span>
@@ -130,6 +131,10 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
               </div>
             </div>
           )}
+
+          <div className="mt-3 border-t border-[var(--line-faint)] pt-3">
+            <VibePicker />
+          </div>
         </div>
       )}
     </div>

@@ -39,10 +39,10 @@ function PatternGrid({ winRows }: { winRows: number[] }) {
               className={cn(
                 "h-3 w-3 rounded-[3px]",
                 !filled
-                  ? "bg-white/[0.04]"
+                  ? "bg-[var(--cell-empty)]"
                   : rows.has(r)
                     ? "bg-[hsl(var(--gold)/0.8)] shadow-[0_0_8px_hsl(var(--gold)/0.35)]"
-                    : "bg-white/[0.1]",
+                    : "bg-[var(--fill-strong)]",
               )}
             />
           ))}
@@ -61,7 +61,7 @@ export function GameRules({ shares, className }: { shares?: PrizeBps; className?
         <button
           type="button"
           className={cn(
-            "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-xl transition-colors hover:bg-white/[0.1] hover:text-foreground",
+            "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--fill)] px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-xl transition-colors hover:bg-[var(--fill-hover)] hover:text-foreground",
             className,
           )}
         >
@@ -70,16 +70,16 @@ export function GameRules({ shares, className }: { shares?: PrizeBps; className?
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="animate-fade fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+        <Dialog.Overlay className="animate-fade fixed inset-0 z-50 bg-[var(--scrim)] backdrop-blur-sm" />
         <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4 focus:outline-none">
           <div className="glass-strong animate-rise w-full max-w-2xl rounded-3xl p-6">
             <div className="flex items-center justify-between">
-              <Dialog.Title className="text-lg font-semibold leading-tight">Ways to win</Dialog.Title>
+              <Dialog.Title className="font-display text-lg font-semibold leading-tight">Ways to win</Dialog.Title>
               <Dialog.Close asChild>
                 <button
                   type="button"
                   aria-label="Close"
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--fill-hover)] hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>

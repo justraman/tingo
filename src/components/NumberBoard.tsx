@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { useVibe } from "@/lib/store/vibe";
+import { cellHueStyle } from "@/lib/vibe-colors";
 
 interface Props {
   drawn: number[];
@@ -15,16 +18,31 @@ const DROP_TRANSITION = {
 };
 
 export function NumberBoard({ drawn, latest }: Props) {
+  const vibe = useVibe();
   const history = [...drawn].reverse();
 
+  // Arcade juices each call with a brief screen-shake (CSS honors reduced-motion).
+  const [shaking, setShaking] = useState(false);
+  const prevLatest = useRef(latest);
+  useEffect(() => {
+    if (latest !== undefined && latest !== prevLatest.current && vibe === "arcade") {
+      setShaking(true);
+      const t = setTimeout(() => setShaking(false), 460);
+      prevLatest.current = latest;
+      return () => clearTimeout(t);
+    }
+    prevLatest.current = latest;
+  }, [latest, vibe]);
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className={cn("flex flex-col gap-5", shaking && "animate-shake")}>
       <div className="flex items-center gap-5">
         <div key={latest ?? "none"} className={cn("relative h-24 w-24 shrink-0", latest !== undefined && "ripple-once")}>
           {latest !== undefined ? (
             <motion.div
               key={latest}
               className="absolute inset-0"
+              style={cellHueStyle(vibe, latest)}
               initial={{ y: -30, scaleX: 0.75, scaleY: 1.25, opacity: 0 }}
               animate={{ y: 0, scaleX: 1, scaleY: 1, opacity: 1 }}
               transition={DROP_TRANSITION}
@@ -40,7 +58,7 @@ export function NumberBoard({ drawn, latest }: Props) {
             <>
               <div className="glass-strong absolute inset-0 rounded-full" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-semibold text-white/25">–</span>
+                <span className="text-2xl font-semibold text-[var(--ink-faint)]">–</span>
               </div>
             </>
           )}
@@ -62,8 +80,12 @@ export function NumberBoard({ drawn, latest }: Props) {
           {history.slice(1).map((n, i) => (
             <span
               key={n}
+              style={vibe === "arcade" ? cellHueStyle(vibe, n) : undefined}
               className={cn(
-                "font-game flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-xs font-semibold tabular-nums text-foreground/85",
+                "font-game flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
+                vibe === "arcade"
+                  ? "cell-dab"
+                  : "border border-[var(--line)] bg-[var(--fill)] text-foreground/85",
                 i === 0 && "animate-fade",
               )}
             >

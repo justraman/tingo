@@ -47,7 +47,13 @@
       "Bash(playground contract *)",
       "Bash(playground --help)",
       "Bash(playground init *)",
-      "Bash(node_modules/.bin/resolc --version)"
+      "Bash(node_modules/.bin/resolc --version)",
+      "mcp__claude-design__list_projects",
+      "mcp__claude-design__list_files",
+      "mcp__claude-design__read_file",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('deps:', list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)\\); print\\('devDeps:', list\\(d.get\\('devDependencies',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(awk -F: '{print $1}')",
+      "Bash(command -v chromium)"
     ]
   }
 }

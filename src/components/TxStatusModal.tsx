@@ -22,7 +22,7 @@ const STEPS: { key: TxStatus; label: string }[] = [
 
 function Spinner() {
   return (
-    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+    <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--line)] border-t-[hsl(var(--foreground)/0.8)]" />
   );
 }
 
@@ -35,7 +35,7 @@ export function TxStatusModal({ open, action, status, error, success, onClose }:
   return (
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next && dismissible) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="animate-fade fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+        <Dialog.Overlay className="animate-fade fixed inset-0 z-50 bg-[var(--scrim)] backdrop-blur-sm" />
         <Dialog.Content
           onEscapeKeyDown={(e) => { if (!dismissible) e.preventDefault(); }}
           onInteractOutside={(e) => { if (!dismissible) e.preventDefault(); }}
@@ -62,7 +62,7 @@ export function TxStatusModal({ open, action, status, error, success, onClose }:
           ) : failed ? (
             <>
               <Dialog.Description asChild>
-                <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-red-400/25 bg-red-500/[0.07] p-4 text-sm text-red-200/90">
+                <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.12)] p-4 text-sm text-[hsl(var(--destructive))]">
                   <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                   <span className="break-words [overflow-wrap:anywhere]">{error}</span>
                 </div>
@@ -77,9 +77,9 @@ export function TxStatusModal({ open, action, status, error, success, onClose }:
                   return (
                     <div key={step.key} className="flex items-center gap-3">
                       <span className="flex h-5 w-5 items-center justify-center">
-                        {state === "done" && <Check className="h-4 w-4 text-[hsl(162_40%_58%)]" />}
+                        {state === "done" && <Check className="h-4 w-4 text-[hsl(var(--ok-foreground))]" />}
                         {state === "active" && <Spinner />}
-                        {state === "pending" && <span className="h-1.5 w-1.5 rounded-full bg-white/20" />}
+                        {state === "pending" && <span className="h-1.5 w-1.5 rounded-full bg-[var(--ink-faint)]" />}
                       </span>
                       <span
                         className={cn(

@@ -7,12 +7,12 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:     "border-transparent bg-foreground text-background",
-        secondary:   "border-white/10 bg-white/[0.08] text-foreground/90",
-        destructive: "border-red-400/30 bg-destructive/25 text-red-200",
-        outline:     "border-white/15 bg-transparent text-muted-foreground",
-        success:     "border-[hsl(162_40%_52%/0.3)] bg-[hsl(162_40%_52%/0.12)] text-[hsl(162_40%_62%)]",
-        live:        "border-[hsl(162_40%_52%/0.3)] bg-[hsl(162_40%_52%/0.12)] text-[hsl(162_40%_62%)]",
+        default:     "border-transparent bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))]",
+        secondary:   "border-[var(--line)] bg-[var(--fill)] text-foreground/90",
+        destructive: "border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.2)] text-[hsl(var(--destructive-foreground))]",
+        outline:     "border-[var(--line-strong)] bg-transparent text-muted-foreground",
+        success:     "border-[hsl(var(--ok)/0.35)] bg-[hsl(var(--ok)/0.14)] text-[hsl(var(--ok-foreground))]",
+        live:        "border-[hsl(var(--ok)/0.35)] bg-[hsl(var(--ok)/0.14)] text-[hsl(var(--ok-foreground))]",
       },
     },
     defaultVariants: { variant: "default" },
@@ -26,8 +26,8 @@ export function Badge({ className, variant, children, ...props }: BadgeProps) {
     <div className={cn(badgeVariants({ variant }), className)} {...props}>
       {variant === "live" && (
         <span className="relative mr-1.5 flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(162_40%_55%)] opacity-50" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-[hsl(162_40%_55%)]" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(var(--ok))] opacity-50" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-[hsl(var(--ok))]" />
         </span>
       )}
       {children}

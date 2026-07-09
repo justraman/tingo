@@ -20,7 +20,7 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
   if (!anyLine && fullhouse.length === 0) return null;
 
   return (
-    <div className="animate-rise rounded-3xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold)/0.05)] p-5 backdrop-blur-2xl shadow-[0_12px_36px_hsl(240_60%_1%/0.6),inset_0_1px_0_hsl(0_0%_100%/0.08)]">
+    <div className="animate-rise rounded-3xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold)/0.05)] p-5 backdrop-blur-2xl shadow-[0_12px_36px_hsl(240_60%_1%/0.6),inset_0_1px_0_hsl(var(--foreground)/0.08)]">
       <div className="flex flex-col gap-2.5">
         {lines.map((winners, i) =>
           winners.length > 0 ? (
@@ -47,7 +47,7 @@ export function WinnerBanner({ topLine, middleLine, bottomLine, fullhouse }: Pro
           ) : null,
         )}
         {fullhouse.length > 0 && (
-          <div className={anyLine ? "mt-2 border-t border-white/10 pt-3" : ""}>
+          <div className={anyLine ? "mt-2 border-t border-[var(--line)] pt-3" : ""}>
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.45)] bg-[hsl(var(--gold)/0.12)]">
                 <Trophy className="h-5 w-5 text-[hsl(var(--gold))]" />
