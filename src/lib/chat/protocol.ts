@@ -26,6 +26,8 @@ export interface ReactionPayload {
   e: string;
   /** Sender's clock in ms — receivers drop replays older than a few seconds. */
   ts: number;
+  /** True for a full-screen rain burst; absent for a single floating reaction. */
+  rain?: boolean;
 }
 
 export function reactionRoomForGame(gameId: bigint): string {

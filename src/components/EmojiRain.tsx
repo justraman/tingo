@@ -20,7 +20,8 @@ export function EmojiRain({ gameId }: { gameId: bigint }) {
   const nextId = useRef(0);
 
   useEffect(() => {
-    return onReaction(gameId, (emoji) => {
+    return onReaction(gameId, (emoji, rain) => {
+      if (!rain) return;   // singles float over the chat instead
       const burst: Drop[] = Array.from({ length: DROPS_PER_BURST }, () => ({
         id: nextId.current++,
         emoji,

@@ -227,6 +227,16 @@
     animation-fill-mode: both;
     filter: drop-shadow(0 4px 12px hsl(240 60% 1% / 0.5));
   }
+
+  /* Single reactions float up inside the chat, live-stream style. */
+  .emoji-float {
+    position: absolute;
+    bottom: 0.5rem;
+    animation-name: emoji-float-up;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+    filter: drop-shadow(0 4px 12px hsl(240 60% 1% / 0.5));
+  }
 }
 
 @keyframes rise {
@@ -259,6 +269,13 @@
   25%      { border-radius: 52% 48% 47% 53% / 48% 53% 47% 52%; }
   50%      { border-radius: 48% 52% 53% 47% / 52% 47% 53% 48%; }
   75%      { border-radius: 51% 49% 48% 52% / 47% 52% 48% 53%; }
+}
+
+@keyframes emoji-float-up {
+  0%   { transform: translateY(0) translateX(0) scale(0.5); opacity: 0; }
+  12%  { transform: translateY(-1.5rem) translateX(0) scale(1.15); opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(-15rem) translateX(var(--drift, 0px)) scale(0.9); opacity: 0; }
 }
 
 @keyframes emoji-fall {
@@ -306,7 +323,7 @@
     animation: none !important;
   }
   .glass-interactive, .glass-interactive:hover { transform: none; }
-  .emoji-drop { display: none; }
+  .emoji-drop, .emoji-float { display: none; }
   /* Static gold ring keeps the win state legible without motion. */
   .fullhouse-win {
     box-shadow:

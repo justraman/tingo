@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Send, MessagesSquare, Pencil } from "lucide-react";
 import { useChatStore, type ChatMessage } from "@/lib/store/chat";
 import { attachChatSubscription, sendChat } from "@/lib/chat/manager";
-import { sendReaction } from "@/lib/chat/reactions";
+import { onReaction, sendReaction } from "@/lib/chat/reactions";
 import { readStoredUsername, writeStoredUsername } from "@/lib/chat/username";
 import { getPrimaryUsername } from "@/lib/host/identity";
 import { CHAT_NAME_MAX, REACTION_EMOJIS } from "@/lib/chat/protocol";
@@ -27,6 +27,16 @@ const NO_MESSAGES: ChatMessage[] = [];
 const RAIN_PRESS_THRESHOLD = 5;
 const RAIN_PRESS_WINDOW_MS = 3000;
 const RAIN_COOLDOWN_MS = 60_000;
+const FLOAT_LIFETIME_MS = 3200;
+
+interface FloatEmoji {
+  id: number;
+  emoji: string;
+  left: number;      // % across the chat
+  drift: number;     // px of horizontal sway while rising
+  duration: number;  // s
+  size: number;      // rem
+}
 
 function senderLabel(m: ChatMessage): string {
   return m.name ?? shortenAddress(m.from, 6, 4);
@@ -44,6 +54,8 @@ export function ChatPanel({ gameId, disabled }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const presses = useRef<{ emoji: string; ts: number }[]>([]);
   const [rainCooldownUntil, setRainCooldownUntil] = useState(0);
+  const [floats, setFloats] = useState<FloatEmoji[]>([]);
+  const nextFloatId = useRef(0);
 
   useEffect(() => {
     void attachChatSubscription(gameId);
@@ -72,6 +84,22 @@ export function ChatPanel({ gameId, disabled }: Props) {
     const t = setTimeout(() => setRainCooldownUntil(0), Math.max(0, rainCooldownUntil - Date.now()));
     return () => clearTimeout(t);
   }, [rainCooldownUntil]);
+
+  useEffect(() => {
+    return onReaction(gameId, (emoji, rain) => {
+      if (rain) return;   // bursts rain full-screen via EmojiRain
+      const id = nextFloatId.current++;
+      setFloats((cur) => [...cur, {
+        id,
+        emoji,
+        left: 8 + Math.random() * 80,
+        drift: (Math.random() - 0.5) * 70,
+        duration: 2.2 + Math.random() * 0.8,
+        size: 1.3 + Math.random() * 0.6,
+      }]);
+      setTimeout(() => setFloats((cur) => cur.filter((f) => f.id !== id)), FLOAT_LIFETIME_MS);
+    });
+  }, [gameId]);
 
   const readonly = disabled || isClosed;
   const showNameForm = !readonly && username !== undefined && (username === null || editingName);
@@ -109,10 +137,12 @@ export function ChatPanel({ gameId, disabled }: Props) {
       ...presses.current.filter((p) => now - p.ts < RAIN_PRESS_WINDOW_MS),
       { emoji, ts: now },
     ];
-    if (presses.current.filter((p) => p.emoji === emoji).length < RAIN_PRESS_THRESHOLD) return;
-    presses.current = [];
-    setRainCooldownUntil(now + RAIN_COOLDOWN_MS);
-    sendReaction(gameId, emoji).catch((e) => console.error("reaction send failed", e));
+    const rain = presses.current.filter((p) => p.emoji === emoji).length >= RAIN_PRESS_THRESHOLD;
+    if (rain) {
+      presses.current = [];
+      setRainCooldownUntil(now + RAIN_COOLDOWN_MS);
+    }
+    sendReaction(gameId, emoji, rain).catch((e) => console.error("reaction send failed", e));
   }
 
   return (
@@ -125,32 +155,52 @@ export function ChatPanel({ gameId, disabled }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-0">
-        <ScrollArea className="glass-inset min-h-[20rem] flex-1 rounded-2xl">
-          <div ref={scrollerRef} className="flex flex-col gap-3 p-4">
-            {messages.length === 0 && (
-              <div className="py-10 text-center text-sm text-muted-foreground">No messages yet — say hi!</div>
-            )}
-            {messages.map((m, i) => {
-              const hue = hueFromSeed(m.from).hsl;
-              const sameSender = i > 0 && messages[i - 1].from === m.from;
-              return (
-                <div key={i} className={sameSender ? "-mt-1.5" : undefined}>
-                  {!sameSender && (
-                    <div className="mb-0.5 flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full" style={{ background: `hsl(${hue})` }} />
-                      <span className="text-xs font-semibold" style={{ color: `hsl(${hue})` }}>
-                        {senderLabel(m)}
-                      </span>
+        <div className="relative min-h-[20rem] flex-1">
+          <ScrollArea className="glass-inset h-full rounded-2xl">
+            <div ref={scrollerRef} className="flex flex-col gap-3 p-4">
+              {messages.length === 0 && (
+                <div className="py-10 text-center text-sm text-muted-foreground">No messages yet — say hi!</div>
+              )}
+              {messages.map((m, i) => {
+                const hue = hueFromSeed(m.from).hsl;
+                const sameSender = i > 0 && messages[i - 1].from === m.from;
+                return (
+                  <div key={i} className={sameSender ? "-mt-1.5" : undefined}>
+                    {!sameSender && (
+                      <div className="mb-0.5 flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: `hsl(${hue})` }} />
+                        <span className="text-xs font-semibold" style={{ color: `hsl(${hue})` }}>
+                          {senderLabel(m)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="animate-fade break-words pl-3.5 text-[15px] leading-relaxed text-foreground/90">
+                      {m.text}
                     </div>
-                  )}
-                  <div className="animate-fade break-words pl-3.5 text-[15px] leading-relaxed text-foreground/90">
-                    {m.text}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
+                );
+              })}
+            </div>
+          </ScrollArea>
+          {floats.length > 0 && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-2xl">
+              {floats.map((f) => (
+                <span
+                  key={f.id}
+                  className="emoji-float"
+                  style={{
+                    left: `${f.left}%`,
+                    fontSize: `${f.size}rem`,
+                    animationDuration: `${f.duration}s`,
+                    "--drift": `${f.drift}px`,
+                  } as React.CSSProperties}
+                >
+                  {f.emoji}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         {showNameForm ? (
           <div className="glass-inset animate-fade rounded-2xl p-3">
@@ -197,7 +247,7 @@ export function ChatPanel({ gameId, disabled }: Props) {
                       onClick={() => react(emoji)}
                       disabled={rainCooldownUntil > 0}
                       aria-label={`React with ${emoji}`}
-                      title={rainCooldownUntil > 0 ? "Too much raining — back in a minute" : "Press 5× fast to make it rain"}
+                      title={rainCooldownUntil > 0 ? "Too much raining — back in a minute" : "Tap to react — 5× fast makes it rain"}
                       className="cursor-pointer rounded-full px-1.5 py-0.5 text-lg transition-transform duration-150 hover:scale-125 active:scale-90 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:scale-100"
                     >
                       {emoji}

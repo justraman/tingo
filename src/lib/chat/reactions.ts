@@ -3,18 +3,24 @@ import { REACTION_EMOJIS, REACTION_TTL_SECONDS, reactionRoomForGame, type Reacti
 
 const REACTION_MAX_AGE_MS = 15_000;
 
-type ReactionListener = (emoji: string) => void;
+// A hundred players tapping along must not flood the statement store: singles
+// are throttled per client (every press still floats locally); rain bursts
+// are rare by design (5-press trigger + 1 min cooldown) and always publish.
+const SINGLE_PUBLISH_MIN_INTERVAL_MS = 400;
+
+type ReactionListener = (emoji: string, rain: boolean) => void;
 
 const listeners = new Map<string, Set<ReactionListener>>();
 const subscribedGames = new Set<string>();
 const seen = new Set<string>();
-const locallyRained = new Set<string>();
+const locallyShown = new Set<string>();
+let lastSinglePublishAt = 0;
 
-function emit(gameKey: string, emoji: string) {
-  listeners.get(gameKey)?.forEach((l) => l(emoji));
+function emit(gameKey: string, emoji: string, rain: boolean) {
+  listeners.get(gameKey)?.forEach((l) => l(emoji, rain));
 }
 
-/** Register a rain callback for a game; lazily opens the statement subscription. */
+/** Register a reaction callback for a game; lazily opens the statement subscription. */
 export function onReaction(gameId: bigint, listener: ReactionListener): () => void {
   const key = gameId.toString();
   let set = listeners.get(key);
@@ -33,27 +39,33 @@ async function subscribeReactions(gameId: bigint) {
   client.subscribe<ReactionPayload>(
     (statement) => {
       const { e, ts } = statement.data ?? {};
+      const rain = statement.data?.rain === true;
       if (typeof e !== "string" || typeof ts !== "number") return;
       if (!REACTION_EMOJIS.includes(e)) return;
       if (Date.now() - ts > REACTION_MAX_AGE_MS) return;
-      if (locallyRained.delete(`${e}:${ts}`)) return;   // own send already rained
-      const dedupeKey = `${statement.signerHex ?? "?"}:${e}:${ts}`;
+      if (locallyShown.delete(`${e}:${ts}:${rain}`)) return;   // own send already shown
+      const dedupeKey = `${statement.signerHex ?? "?"}:${e}:${ts}:${rain}`;
       if (seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
-      emit(key, e);
+      emit(key, e, rain);
     },
     { topic2: reactionRoomForGame(gameId) },
   );
 }
 
-/** Rain locally right away; broadcast best-effort (standalone stays local-only). */
-export async function sendReaction(gameId: bigint, emoji: string) {
+/** Show locally right away; broadcast best-effort (standalone stays local-only). */
+export async function sendReaction(gameId: bigint, emoji: string, rain = false) {
   const ts = Date.now();
-  emit(gameId.toString(), emoji);
-  locallyRained.add(`${emoji}:${ts}`);
+  emit(gameId.toString(), emoji, rain);
+  if (!rain) {
+    if (ts - lastSinglePublishAt < SINGLE_PUBLISH_MIN_INTERVAL_MS) return;
+    lastSinglePublishAt = ts;
+  }
+  locallyShown.add(`${emoji}:${ts}:${rain}`);
   const client = await getChatClient().catch(() => null);
   if (!client) return;
-  await client.publish<ReactionPayload>({ e: emoji, ts }, {
+  const payload: ReactionPayload = rain ? { e: emoji, ts, rain: true } : { e: emoji, ts };
+  await client.publish<ReactionPayload>(payload, {
     topic2: reactionRoomForGame(gameId),
     ttlSeconds: REACTION_TTL_SECONDS,
   });
