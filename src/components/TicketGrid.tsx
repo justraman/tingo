@@ -1,8 +1,8 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { hueFromGrid, type TicketHue } from "@/lib/ticket-hues";
+import { hueFromGrid, TICKET_HUES, type TicketHue } from "@/lib/ticket-hues";
 import { useVibe, type Vibe } from "@/lib/store/vibe";
-import { cellHueStyle } from "@/lib/vibe-colors";
+import { ticketHue } from "@/lib/vibe-colors";
 
 export interface TicketOverlay {
   label: string;
@@ -35,12 +35,25 @@ interface Props {
   size?: "sm" | "md";
   hue?: TicketHue;                  // defaults to a deterministic hue from the grid
   vibe?: Vibe;                      // override the active vibe (used by the vibe-preview cards)
+  title?: ReactNode;               // in-frame header, left (e.g. "Ticket A")
+  subtitle?: ReactNode;            // in-frame header, right (e.g. short hash / owner)
 }
 
-export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows, overlay, overlayMode = "cover", size = "md", hue, vibe: vibeProp }: Props) {
+export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows, overlay, overlayMode = "cover", size = "md", hue, vibe: vibeProp, title, subtitle }: Props) {
   const activeVibe = useVibe();
   const vibe = vibeProp ?? activeVibe;
-  const th = (hue ?? hueFromGrid(grid)).hsl;
+  const baseHue = hue ?? hueFromGrid(grid);
+  const th = ticketHue(vibe, baseHue.hsl, Math.max(0, TICKET_HUES.indexOf(baseHue)));
+  // Vintage tickets sit on the table at a slight, stable tilt.
+  const tilt = vibe === "vintage" ? (grid.flat().reduce((a, n) => a + n, 0) % 2 ? 0.8 : -0.8) : 0;
+
+  const titleStyle: CSSProperties | undefined = vibe === "arcade" ? { color: `hsl(${th})` } : undefined;
+  const titleClass = cn(
+    size === "sm" ? "text-[10px]" : "text-xs",
+    vibe === "vintage"
+      ? "font-game uppercase tracking-[0.18em] text-muted-foreground"
+      : "font-display font-bold tracking-tight",
+  );
   const polled = new Set(polledNumbers);
   const struck = new Set(struckRows ?? []);
   const latest = polledNumbers[polledNumbers.length - 1];
@@ -52,13 +65,21 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
 
   return (
     <div
-      style={{ "--th": th } as CSSProperties}
+      style={{ "--th": th, transform: tilt ? `rotate(${tilt}deg)` : undefined } as CSSProperties}
       className={cn(
-        "glass relative inline-block",
+        "glass ticket-surface relative inline-block",
         size === "sm" ? "rounded-xl p-1.5" : "rounded-2xl p-2",
         wonFullhouse && "fullhouse-win",
       )}
     >
+      {(title || subtitle) && (
+        <div className={cn("flex items-center justify-between gap-2 px-0.5", size === "sm" ? "mb-1.5" : "mb-2")}>
+          {title && <span className={titleClass} style={titleStyle}>{title}</span>}
+          {subtitle && (
+            <span className="max-w-[55%] truncate text-right font-mono text-[10px] text-muted-foreground">{subtitle}</span>
+          )}
+        </div>
+      )}
       <div className="flex flex-col gap-0.5">
         {grid.map((row, r) => (
           <div key={r} className={cn("relative flex gap-0.5 p-0.5", highlightRow === r && "row-win")}>
@@ -67,14 +88,13 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
               return (
                 <div
                   key={c}
-                  style={isDabbed ? cellHueStyle(vibe, v) : undefined}
                   className={cn(
                     "cell",
                     cellBase,
                     v === 0
                       ? "cell-empty"
                       : isDabbed
-                        ? cn("cell-dab dab-in", v === latest && "ring-1 ring-[var(--cell-ring)]")
+                        ? cn("cell-dab dab-in", v === latest && "cell-latest")
                         : "cell-open",
                   )}
                 >

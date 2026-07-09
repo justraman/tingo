@@ -13,6 +13,7 @@ import { GameRules } from "@/components/GameRules";
 import { ChatPanel } from "@/components/ChatPanel";
 import { EmojiRain } from "@/components/EmojiRain";
 import { TxStatusModal } from "@/components/TxStatusModal";
+import { WinOverlay } from "@/components/WinOverlay";
 import { AccountButtonView } from "@/components/AccountButton";
 import { useChatStore } from "@/lib/store/chat";
 import { TICKET_HUES } from "@/lib/ticket-hues";
@@ -46,6 +47,7 @@ function useMockChat() {
 
 export function PreviewPage() {
   useMockChat();
+  const [win, setWin] = useState<"none" | "winner" | "noWinner">("none");
   const [txDemo, setTxDemo] = useState<{
     status: TxStatus | ""; error?: string; success?: { title: string; message: string };
   } | null>(null);
@@ -81,6 +83,8 @@ export function PreviewPage() {
               highlightRow={i === 2 ? 0 : undefined}
               overlay={i === 2 ? [{ label: "Top line winner", kind: "line" }] : undefined}
               overlayMode="ribbon"
+              title={`Ticket ${String.fromCharCode(65 + i)}`}
+              subtitle={hue.name}
             />
           ))}
         </CardContent>
@@ -152,9 +156,19 @@ export function PreviewPage() {
               Tx modal — success
             </Button>
             <GameRules shares={{ lineBps: 1500, fullhouseBps: 5000, hostBps: 500 }} />
+            <Button variant="secondary" onClick={() => setWin("winner")}>Win overlay</Button>
+            <Button variant="secondary" onClick={() => setWin("noWinner")}>Win overlay — no winner</Button>
           </div>
         </CardContent>
       </Card>
+
+      {win !== "none" && (
+        <WinOverlay
+          winners={win === "winner" ? [{ winner: ADDR, payout: 500_000_000_000n, host: ADDR, hostFee: 50_000_000_000n }] : []}
+          noWinner={win === "noWinner"}
+          onOpenGame={() => setWin("none")}
+        />
+      )}
 
       <TxStatusModal
         open={txDemo !== null}

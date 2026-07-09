@@ -17,9 +17,26 @@ const ARCADE_DECADES = [
 ] as const;
 
 /** Inline style carrying --cell-hue for a drawn number, or undefined when the
-    vibe wants the CSS default (ticket hue / stamp). */
+    vibe wants the CSS default (ticket hue / stamp). Used for the draw ball and
+    the drawn-number history, which color by decade in arcade. */
 export function cellHueStyle(vibe: Vibe, n: number): CSSProperties | undefined {
   if (vibe !== "arcade") return undefined;
   const hue = ARCADE_DECADES[Math.min(8, Math.floor((n - 1) / 10))];
   return { "--cell-hue": hue } as CSSProperties;
+}
+
+// Arcade tickets each take one neon hue (dabs are single-color, like the mock);
+// vintage stamps everything in brand red; glass keeps its muted paper hue.
+const ARCADE_TICKET_HUES = [
+  "338 100% 59%", "188 100% 57%", "46 100% 60%",
+  "154 90% 59%", "268 100% 71%", "320 100% 68%",
+] as const;
+
+export function ticketHue(vibe: Vibe, baseHsl: string, index: number): string {
+  if (vibe === "vintage") return "11 56% 51%";
+  if (vibe === "arcade") {
+    const i = ((index % ARCADE_TICKET_HUES.length) + ARCADE_TICKET_HUES.length) % ARCADE_TICKET_HUES.length;
+    return ARCADE_TICKET_HUES[i];
+  }
+  return baseHsl;
 }

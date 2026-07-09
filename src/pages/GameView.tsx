@@ -11,6 +11,7 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { EmojiRain } from "@/components/EmojiRain";
 import { WalletStatus } from "@/components/WalletStatus";
 import { WinnerBanner } from "@/components/WinnerBanner";
+import { WinOverlay } from "@/components/WinOverlay";
 import { GameRules } from "@/components/GameRules";
 import { TxStatusModal } from "@/components/TxStatusModal";
 
@@ -75,6 +76,7 @@ export function GameView({ id }: { id: string }) {
   const [success, setSuccess] = useState<{ title: string; message: string } | null>(null);
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const [prizeShares, setPrizeShares] = useState<PrizeBps | undefined>();
+  const [showResult, setShowResult] = useState(true);
 
   useEffect(() => {
     const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
@@ -196,6 +198,8 @@ export function GameView({ id }: { id: string }) {
   const game = snap?.game;
   const drawn = snap?.drawn ?? [];
   const ended = game?.state === 2 || game?.state === 3;
+  const finalWinners = snap?.finalWinners ?? [];
+  const gameOver = finalWinners.length > 0 || Boolean(snap?.noWinner);
   const lineWinners = (line: number) => snap?.lineWinners.filter((w) => w.line === line) ?? [];
 
   // The worker normally pokes drawNumber, but it is permissionless — when the
@@ -454,8 +458,8 @@ export function GameView({ id }: { id: string }) {
               {tab === "mine" && myTickets.length === 0 && (
                 <div className="text-sm text-muted-foreground">You have no tickets in this game yet.</div>
               )}
-              {tab === "mine" && myTickets.map((t) => (
-                <div key={t.hash} className="animate-rise space-y-1.5">
+              {tab === "mine" && myTickets.map((t, i) => (
+                <div key={t.hash} className="animate-rise">
                   <TicketGrid
                     grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
                     polledNumbers={drawn}
@@ -464,15 +468,16 @@ export function GameView({ id }: { id: string }) {
                     overlay={overlayFor(t)}
                     overlayMode="cover"
                     hue={hueFromSeed(t.hash)}
+                    title={`Ticket ${String.fromCharCode(65 + (i % 26))}`}
+                    subtitle={shortenAddress(t.hash)}
                   />
-                  <div className="font-mono text-xs text-muted-foreground">hash {shortenAddress(t.hash)}</div>
                 </div>
               ))}
               {tab === "others" && otherTickets.length === 0 && (
                 <div className="text-sm text-muted-foreground">No other tickets yet.</div>
               )}
-              {tab === "others" && otherTickets.map((t) => (
-                <div key={t.hash} className="animate-rise space-y-1.5">
+              {tab === "others" && otherTickets.map((t, i) => (
+                <div key={t.hash} className="animate-rise">
                   <TicketGrid
                     grid={gridFromMasks(t.topRowMask, t.middleRowMask, t.bottomRowMask)}
                     polledNumbers={drawn}
@@ -482,8 +487,9 @@ export function GameView({ id }: { id: string }) {
                     overlayMode="cover"
                     size="sm"
                     hue={hueFromSeed(t.hash)}
+                    title={`Ticket ${String.fromCharCode(65 + (i % 26))}`}
+                    subtitle={<AddressLabel address={t.owner} />}
                   />
-                  <div className="font-mono text-xs text-muted-foreground"><AddressLabel address={t.owner} /></div>
                 </div>
               ))}
             </CardContent>
@@ -532,6 +538,14 @@ export function GameView({ id }: { id: string }) {
       <div className="self-start lg:sticky lg:top-24 lg:h-[calc(100dvh-7.5rem)]">
         <ChatPanel gameId={gameId} disabled={ended} />
       </div>
+
+      {gameOver && showResult && (
+        <WinOverlay
+          winners={finalWinners}
+          noWinner={Boolean(snap?.noWinner)}
+          onOpenGame={() => setShowResult(false)}
+        />
+      )}
     </div>
   );
 }
