@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,10 @@ import { EmojiRain } from "@/components/EmojiRain";
 import { WalletStatus } from "@/components/WalletStatus";
 import { WinnerBanner } from "@/components/WinnerBanner";
 import { WinOverlay } from "@/components/WinOverlay";
+import { WinnerCelebration } from "@/components/WinnerCelebration";
+import { CallBoard } from "@/components/CallBoard";
+import { PrizeSplit } from "@/components/PrizeSplit";
+import { useVibe } from "@/lib/store/vibe";
 import { GameRules } from "@/components/GameRules";
 import { TxStatusModal } from "@/components/TxStatusModal";
 
@@ -77,6 +81,25 @@ export function GameView({ id }: { id: string }) {
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const [prizeShares, setPrizeShares] = useState<PrizeBps | undefined>();
   const [showResult, setShowResult] = useState(true);
+  const vibe = useVibe();
+
+  // A fresh call jolts the whole game UI in arcade & vintage (CSS honors
+  // reduced-motion). Baseline after load and only during live play, so opening
+  // an already-drawn / already-won game doesn't shake.
+  const [shaking, setShaking] = useState(false);
+  const prevDrawnLen = useRef<number | null>(null);
+  useEffect(() => {
+    if (!snap?.game) return;
+    const len = snap.drawn?.length ?? 0;
+    const prev = prevDrawnLen.current;
+    prevDrawnLen.current = len;
+    if (prev === null) return;                         // first load — set baseline, don't shake
+    if (len > prev && vibe !== "glass" && snap.game.state === 1) {
+      setShaking(true);
+      const t = setTimeout(() => setShaking(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [snap?.drawn?.length, snap?.game, vibe]);
 
   useEffect(() => {
     const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
@@ -336,6 +359,12 @@ export function GameView({ id }: { id: string }) {
   ];
 
   return (
+    <div className={cn(shaking && "animate-shake")}>
+    {gameOver && vibe !== "glass" && (
+      <div className="animate-rise mb-6">
+        <WinnerCelebration winners={finalWinners} noWinner={Boolean(snap?.noWinner)} />
+      </div>
+    )}
     <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
       <EmojiRain gameId={gameId} />
       <div className="flex flex-col gap-5">
@@ -401,7 +430,7 @@ export function GameView({ id }: { id: string }) {
           </div>
         )}
 
-        {game.state !== 0 && (
+        {game.state !== 0 && (vibe === "glass" ? (
           <Card className="animate-rise" style={{ animationDelay: "80ms" }}>
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <CardTitle className="text-lg">Drawn numbers</CardTitle>
@@ -419,6 +448,39 @@ export function GameView({ id }: { id: string }) {
               <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
             </CardContent>
           </Card>
+        ) : (
+          <div
+            className={cn("glass animate-rise relative overflow-hidden rounded-3xl p-6", vibe === "arcade" ? "scanlines" : "paper-frame")}
+            style={{ animationDelay: "80ms" }}
+          >
+            <div className="relative">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <span className="font-display text-lg">{vibe === "arcade" ? "Now calling" : "The caller"}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-game text-xs text-muted-foreground">{drawn.length} / 90 {vibe === "arcade" ? "drawn" : "called"}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={soundMuted ? "Unmute number call-outs" : "Mute number call-outs"}
+                    onClick={toggleSound}
+                  >
+                    {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <NumberBoard drawn={drawn} latest={drawn[drawn.length - 1]} showHistory={false} />
+              {drawn.length > 0 && (
+                <div className="mt-5 border-t border-[var(--line)] pt-4">
+                  <CallBoard drawn={drawn} latest={drawn[drawn.length - 1]} />
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {game.state !== 0 && vibe !== "glass" && prizeShares && (
+          <div className="animate-rise"><PrizeSplit shares={prizeShares} /></div>
         )}
 
         {canBuy && (
@@ -546,6 +608,7 @@ export function GameView({ id }: { id: string }) {
           onOpenGame={() => setShowResult(false)}
         />
       )}
+    </div>
     </div>
   );
 }

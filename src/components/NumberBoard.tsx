@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useVibe } from "@/lib/store/vibe";
@@ -7,6 +6,7 @@ import { cellHueStyle } from "@/lib/vibe-colors";
 interface Props {
   drawn: number[];
   latest?: number;
+  showHistory?: boolean;   // false when a full CallBoard renders the drawn set instead
 }
 
 // Underdamped springs so the drop overshoots and wobbles before settling.
@@ -17,25 +17,12 @@ const DROP_TRANSITION = {
   opacity: { duration: 0.2 } as const,
 };
 
-export function NumberBoard({ drawn, latest }: Props) {
+export function NumberBoard({ drawn, latest, showHistory = true }: Props) {
   const vibe = useVibe();
   const history = [...drawn].reverse();
 
-  // Arcade juices each call with a brief screen-shake (CSS honors reduced-motion).
-  const [shaking, setShaking] = useState(false);
-  const prevLatest = useRef(latest);
-  useEffect(() => {
-    if (latest !== undefined && latest !== prevLatest.current && vibe === "arcade") {
-      setShaking(true);
-      const t = setTimeout(() => setShaking(false), 460);
-      prevLatest.current = latest;
-      return () => clearTimeout(t);
-    }
-    prevLatest.current = latest;
-  }, [latest, vibe]);
-
   return (
-    <div className={cn("flex flex-col gap-5", shaking && "animate-shake")}>
+    <div className="flex flex-col gap-5">
       <div className="flex items-center gap-5">
         <div key={latest ?? "none"} className={cn("relative h-24 w-24 shrink-0", latest !== undefined && "ripple-once")}>
           {latest !== undefined ? (
@@ -75,7 +62,7 @@ export function NumberBoard({ drawn, latest }: Props) {
         </div>
       </div>
 
-      {history.length > 1 && (
+      {showHistory && history.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
           {history.slice(1).map((n, i) => (
             <span

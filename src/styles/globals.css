@@ -332,6 +332,25 @@
     backdrop-filter: none;
   }
 
+  /* Arcade CRT scanlines + vintage dashed inner frame (decorative overlays). */
+  .scanlines::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0.35;
+    background: repeating-linear-gradient(0deg, transparent, transparent 3px, hsl(0 0% 100% / 0.03) 3px, hsl(0 0% 100% / 0.03) 4px);
+  }
+  .paper-frame::before {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border: 1.5px dashed hsl(var(--input));
+    border-radius: 6px;
+    pointer-events: none;
+  }
+
   /* ---- Ticket / board number cells ---------------------------------- */
   /* Centralized so all three vibes theme through one set of classes. The
      dabbed cell's hue comes from --cell-hue (set inline per number/vibe),
