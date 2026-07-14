@@ -73,7 +73,7 @@ export function PreviewPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-lg">Tickets — one per hue</CardTitle></CardHeader>
-        <CardContent className="flex flex-wrap gap-5">
+        <CardContent className="grid gap-5 grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
           {TICKET_HUES.map((hue, i) => (
             <TicketGrid
               key={hue.name}

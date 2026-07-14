@@ -41,7 +41,7 @@ export function TicketGenerator({ gameId, ticketPrice, tokenSymbol, decimals, di
       </CardHeader>
       <CardContent>
         {draft ? (
-          <div key={draft.grid.flat().join(",")} className="animate-fade inline-block">
+          <div key={draft.grid.flat().join(",")} className="animate-fade">
             <TicketGrid grid={draft.grid} />
           </div>
         ) : (

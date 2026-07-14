@@ -58,17 +58,19 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
   const struck = new Set(struckRows ?? []);
   const latest = polledNumbers[polledNumbers.length - 1];
   const wonFullhouse = overlay?.some((o) => o.kind === "fullhouse") ?? false;
+  // Fluid cells: the 9-column grid shrinks with its container so a ticket can
+  // never overflow a phone; the max-w caps match the old fixed desktop sizes.
   const cellBase =
     size === "sm"
-      ? "h-7 w-7 text-xs rounded-md"
-      : "h-10 w-10 sm:h-12 sm:w-12 text-sm sm:text-base rounded-lg";
+      ? "aspect-square w-full text-xs rounded-md"
+      : "aspect-square w-full text-sm sm:text-base rounded-lg";
 
   return (
     <div
       style={{ "--th": th, transform: tilt ? `rotate(${tilt}deg)` : undefined } as CSSProperties}
       className={cn(
-        "glass ticket-surface relative inline-block",
-        size === "sm" ? "rounded-xl p-1.5" : "rounded-2xl p-2",
+        "glass ticket-surface relative w-full",
+        size === "sm" ? "max-w-[19rem] rounded-xl p-1.5" : "max-w-[30rem] rounded-2xl p-2",
         wonFullhouse && "fullhouse-win",
       )}
     >
@@ -82,7 +84,7 @@ export function TicketGrid({ grid, polledNumbers = [], highlightRow, struckRows,
       )}
       <div className="flex flex-col gap-0.5">
         {grid.map((row, r) => (
-          <div key={r} className={cn("relative flex gap-0.5 p-0.5", highlightRow === r && "row-win")}>
+          <div key={r} className={cn("relative grid grid-cols-9 gap-0.5 p-0.5", highlightRow === r && "row-win")}>
             {row.map((v, c) => {
               const isDabbed = v !== 0 && polled.has(v);
               return (

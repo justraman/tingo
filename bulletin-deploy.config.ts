@@ -11,6 +11,12 @@
 export default {
   domain:      process.env.MANIFEST_DOMAIN ?? "tambola-game.dot",
   displayName: "Tambola",
+  // Hosts read displayName/description/icon from the DotNS `manifest` text
+  // record; the whole root manifest must stay under the 1 KiB record budget.
+  description:
+    "On-chain Tambola/Bingo. Buy tickets, watch live number draws, " +
+    "chat and react with other players, and win the pot — a smart contract on " +
+    "Polkadot Asset Hub referees every game and pays out trustlessly.",
   icon: { path: "./public/icon.png", format: "png" as const },
   executables: [
     {

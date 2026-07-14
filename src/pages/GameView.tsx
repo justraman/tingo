@@ -516,7 +516,12 @@ export function GameView({ id }: { id: string }) {
                 ))}
               </div>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-5">
+            <CardContent className={cn(
+              "grid gap-5",
+              tab === "mine"
+                ? "grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))]"
+                : "grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))]",
+            )}>
               {tab === "mine" && myTickets.length === 0 && (
                 <div className="text-sm text-muted-foreground">You have no tickets in this game yet.</div>
               )}
