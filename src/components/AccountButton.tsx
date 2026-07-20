@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
-import { useAccounts } from "@/lib/chain/use-accounts";
-import { useBalance } from "@/lib/chain/use-balance";
-import { useWalletStore } from "@/lib/store/wallet";
-import { getPrimaryUsername } from "@/lib/host/identity";
+import { useAccounts, useBalance, useUserId } from "@use-truapi/react";
 import { VibePicker } from "@/components/VibePicker";
 import { readWithdrawable } from "@/lib/tambola/read";
 import { CHAIN } from "@/lib/chain/constants";
@@ -142,29 +139,23 @@ export function AccountButtonView({ label, address, balance, winnings, accounts,
 }
 
 export function AccountButton() {
-  const { accounts, isReady } = useAccounts();
-  const selected = useWalletStore((s) => s.selectedAddress) ?? accounts[0]?.address;
-  const setSelected = useWalletStore((s) => s.setSelected);
-  const account = accounts.find((a) => a.address === selected) ?? accounts[0];
+  const { accounts, selectedAccount, isConnected, select } = useAccounts();
+  const account = selectedAccount ?? accounts[0];
 
-  const balance = useBalance(account?.address);
-  const [username, setUsername] = useState<string | null>(null);
+  const { data: balance } = useBalance(account?.address);
+  const { data: username } = useUserId();
   const [winnings, setWinnings] = useState<bigint | null>(null);
 
-  useEffect(() => {
-    void getPrimaryUsername().then(setUsername).catch(() => {});
-  }, []);
-
-  if (!isReady || !account) return null;
+  if (!isConnected || !account) return null;
 
   return (
     <AccountButtonView
       label={username ?? account.name ?? shortenAddress(account.address, 4, 4)}
       address={account.address}
-      balance={balance}
+      balance={balance?.free ?? null}
       winnings={winnings}
-      accounts={accounts}
-      onSelect={setSelected}
+      accounts={accounts.map((a) => ({ address: a.address, name: a.name ?? undefined }))}
+      onSelect={select}
       onOpen={() => {
         readWithdrawable(account.address).then(setWinnings).catch(() => {});
       }}

@@ -1,4 +1,4 @@
-import { getChatClient } from "./client";
+import { truapi } from "@/lib/truapi";
 import { REACTION_EMOJIS, REACTION_TTL_SECONDS, reactionRoomForGame, type ReactionPayload } from "./protocol";
 
 const REACTION_MAX_AGE_MS = 15_000;
@@ -26,17 +26,17 @@ export function onReaction(gameId: bigint, listener: ReactionListener): () => vo
   let set = listeners.get(key);
   if (!set) listeners.set(key, (set = new Set()));
   set.add(listener);
-  void subscribeReactions(gameId);
+  subscribeReactions(gameId);
   return () => { set.delete(listener); };
 }
 
-async function subscribeReactions(gameId: bigint) {
+// The statements controller resolves its client lazily and stays inert
+// standalone, so subscribing is fire-and-forget.
+function subscribeReactions(gameId: bigint) {
   const key = gameId.toString();
   if (subscribedGames.has(key)) return;
-  const client = await getChatClient().catch(() => null);
-  if (!client || subscribedGames.has(key)) return;
   subscribedGames.add(key);
-  client.subscribe<ReactionPayload>(
+  truapi.statements.subscribe<ReactionPayload>(
     (statement) => {
       const { e, ts } = statement.data ?? {};
       const rain = statement.data?.rain === true;
@@ -62,10 +62,8 @@ export async function sendReaction(gameId: bigint, emoji: string, rain = false) 
     lastSinglePublishAt = ts;
   }
   locallyShown.add(`${emoji}:${ts}:${rain}`);
-  const client = await getChatClient().catch(() => null);
-  if (!client) return;
   const payload: ReactionPayload = rain ? { e: emoji, ts, rain: true } : { e: emoji, ts };
-  await client.publish<ReactionPayload>(payload, {
+  await truapi.statements.publish<ReactionPayload>(payload, {
     topic2: reactionRoomForGame(gameId),
     ttlSeconds: REACTION_TTL_SECONDS,
   });

@@ -15,7 +15,9 @@ import { EmojiRain } from "@/components/EmojiRain";
 import { TxStatusModal } from "@/components/TxStatusModal";
 import { WinOverlay } from "@/components/WinOverlay";
 import { AccountButtonView } from "@/components/AccountButton";
-import { useChatStore } from "@/lib/store/chat";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@use-truapi/react";
+import { roomIdForGame } from "@/lib/chat/protocol";
 import { TICKET_HUES } from "@/lib/ticket-hues";
 import type { TxStatus } from "@/lib/tambola/write";
 
@@ -37,12 +39,18 @@ const MOCK_CHAT = [
   { from: "worker", name: "Tambola", text: "Number 83 drawn — 13 of 90." },
 ];
 
+// Seed the statements query cache ChatPanel reads from — the live
+// subscription is inert outside a host, so the mock data is retained.
 function useMockChat() {
+  const client = useQueryClient();
   useEffect(() => {
-    const store = useChatStore.getState();
-    if ((store.byId[MOCK_CHAT_GAME.toString()] ?? []).length > 0) return;
-    MOCK_CHAT.forEach((m) => store.append(MOCK_CHAT_GAME, { ...m, ts: Date.now() }));
-  }, []);
+    const key = queryKeys.statements(roomIdForGame(MOCK_CHAT_GAME));
+    if ((client.getQueryData(key) as unknown[] | undefined)?.length) return;
+    client.setQueryData(
+      key,
+      MOCK_CHAT.map(({ from, ...data }) => ({ data, signerHex: from, topics: [], raw: {} })),
+    );
+  }, [client]);
 }
 
 export function PreviewPage() {
@@ -58,7 +66,7 @@ export function PreviewPage() {
       const t = setTimeout(() => setTxDemo(null), 1200);
       return () => clearTimeout(t);
     }
-    const order: TxStatus[] = ["signing", "broadcasted", "in-block", "finalized"];
+    const order: TxStatus[] = ["signing", "broadcasting", "in-block", "finalized"];
     const next = order[order.indexOf(txDemo.status as TxStatus) + 1];
     const t = setTimeout(() => setTxDemo({ status: next }), 1400);
     return () => clearTimeout(t);

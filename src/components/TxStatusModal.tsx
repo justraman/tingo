@@ -14,10 +14,10 @@ interface Props {
 }
 
 const STEPS: { key: TxStatus; label: string }[] = [
-  { key: "signing",     label: "Waiting for signature" },
-  { key: "broadcasted", label: "Broadcasting" },
-  { key: "in-block",    label: "In block" },
-  { key: "finalized",   label: "Finalized" },
+  { key: "signing",      label: "Waiting for signature" },
+  { key: "broadcasting", label: "Broadcasting" },
+  { key: "in-block",     label: "In block" },
+  { key: "finalized",    label: "Finalized" },
 ];
 
 function Spinner() {
