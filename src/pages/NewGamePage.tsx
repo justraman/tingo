@@ -4,10 +4,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useAccounts } from "@/lib/chain/use-accounts";
+import { useAccounts } from "@use-truapi/react";
 import { WalletStatus } from "@/components/WalletStatus";
 import { TxStatusModal } from "@/components/TxStatusModal";
-import { useWalletStore } from "@/lib/store/wallet";
 import { callCreateGame, type TxStatus } from "@/lib/tambola/write";
 import { parsePlanck } from "@/lib/utils";
 import { CHAIN, DRAW_INTERVAL_SECONDS } from "@/lib/chain/constants";
@@ -49,8 +48,7 @@ function PrizeSplitBar() {
 }
 
 export function NewGamePage() {
-  const { accounts, isReady } = useAccounts();
-  const selected = useWalletStore((s) => s.selectedAddress) ?? accounts[0]?.address;
+  const { isConnected } = useAccounts();
 
   // datetime-local wants wall-clock local time; toISOString() would shift it to UTC.
   const defaultStart = toDatetimeLocalValue(new Date(Date.now() + 5 * 60 * 1000));
@@ -63,9 +61,6 @@ export function NewGamePage() {
   async function submit() {
     setError(""); setStatus("signing"); setBusy(true);
     try {
-      const account = accounts.find((a) => a.address === selected) ?? accounts[0];
-      if (!account) throw new Error("No wallet account available");
-
       const startTs    = BigInt(Math.floor(new Date(start).getTime() / 1000));
       if (startTs <= BigInt(Math.floor(Date.now() / 1000))) {
         throw new Error("Start time must be in the future.");
@@ -73,8 +68,6 @@ export function NewGamePage() {
       const pricePlanck = parsePlanck(price, CHAIN.decimals);
       if (pricePlanck <= 0n) throw new Error("Ticket price must be greater than zero.");
       await callCreateGame({
-        signerAddress: account.address,
-        signer: account.polkadotSigner as any,
         startTimestampSec: startTs,
         ticketPrice: pricePlanck,
         onStatus: (s) => setStatus(s),
@@ -115,7 +108,7 @@ export function NewGamePage() {
           </div>
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-3">
-          <Button onClick={submit} disabled={busy || !isReady} size="lg">Create game</Button>
+          <Button onClick={submit} disabled={busy || !isConnected} size="lg">Create game</Button>
           <WalletStatus />
         </CardFooter>
       </Card>

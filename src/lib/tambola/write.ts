@@ -1,94 +1,48 @@
 /**
- * Mutating contract calls. Builds a `Revive.call` extrinsic, wraps with
- * `Utility.batch_all(Revive.map_account, …)` if the account isn't mapped yet,
- * and exposes a Promise-shaped `watchTransaction` helper around the PAPI
- * observable.
+ * Mutating contract calls through the use-truapi contract handle: dry-run
+ * pre-flight, sign with the runtime's signer manager, submit and watch.
  */
 
-import { bytesToHex, decodeErrorResult, encodeFunctionData, type Abi } from "viem";
-import { Binary, type PolkadotSigner } from "polkadot-api";
-import { ss58ToH160 } from "@parity/product-sdk-address";
-import { getClient } from "@/lib/chain/client";
-import { ensureChainSubmitPermission } from "@/lib/chain/signer";
-import { NATIVE_TO_ETH_RATIO, READ_ONLY_ORIGIN, TAMBOLA_ADDRESS } from "@/lib/chain/constants";
-import { TAMBOLA_ABI } from "./abi";
+import type { TxResult, TxStatus } from "@use-truapi/react";
+import { truapi } from "@/lib/truapi";
+import { NATIVE_TO_ETH_RATIO } from "@/lib/chain/constants";
+import { TAMBOLA_CDM, getTambolaContract } from "./contract";
 import type { TicketLayout } from "./encode";
 
-const GAS_MULTIPLIER = 4n;
+export type { TxStatus };
 
-export type TxStatus = "signing" | "broadcasted" | "in-block" | "finalized";
+type TxHandle = { tx: (...args: unknown[]) => Promise<TxResult> };
 
-async function buildContractCall(
-  signerAddress: string,
-  functionName: string,
-  args: readonly unknown[],
-  value: bigint,
-) {
-  await ensureChainSubmitPermission();
-  const client = await getClient();
-  const unsafe = (client as unknown as { getUnsafeApi: () => any }).getUnsafeApi();
-
-  const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName, args });
-  // PAPI v2 + metadata v16: H160 params are hex strings, not Binary.
-  const dest    = TAMBOLA_ADDRESS.toLowerCase() as `0x${string}`;
-  const dataBin = Binary.fromHex(calldata);
-
-  // Map the account if it hasn't been mapped already. map_account reverts for
-  // already-mapped accounts, which would fail the whole batch_all.
-  const h160 = ss58ToH160(signerAddress);
-  const isMapped = (await unsafe.query.Revive.OriginalAccount.getValue(h160)) !== undefined;
-
-  // The runtime rejects dry-runs from unmapped origins (AccountUnmapped), so
-  // estimate with the known-mapped read origin until this account is mapped.
-  const dryRunOrigin = isMapped ? signerAddress : READ_ONLY_ORIGIN;
-  const dryRun = await unsafe.apis.ReviveApi.call(
-    dryRunOrigin,
-    dest,
-    value,
-    undefined,
-    undefined,
-    dataBin,
-    { at: "best" },
-  );
-  if (!dryRun.result.success) {
-    throw new Error(`dry-run failed for ${functionName}: ${describeDispatchError(dryRun.result.value)}`);
-  }
-  if (dryRun.result.value.flags & 1) {
-    throw new Error(`contract reverted (${functionName}): ${decodeRevertReason(dryRun.result.value.data)}`);
-  }
-
-  const weightLimit = {
-    ref_time:    dryRun.weight_required.ref_time   * GAS_MULTIPLIER,
-    proof_size:  dryRun.weight_required.proof_size * GAS_MULTIPLIER,
-  };
-  const storageDepositLimit = dryRun.storage_deposit?.value;
-
-  const reviveCall = unsafe.tx.Revive.call({
-    dest,
-    value,
-    weight_limit: weightLimit,
-    storage_deposit_limit: storageDepositLimit,
-    data: dataBin,
-  });
-
-  if (!isMapped) {
-    const mapCall = unsafe.tx.Revive.map_account();
-    return unsafe.tx.Utility.batch_all({
-      calls: [mapCall.decodedCall, reviveCall.decodedCall],
-    });
-  }
-  return reviveCall;
+interface TxOpts {
+  value?: bigint;                     // native planck — the runtime scales it into msg.value
+  onStatus?: (s: TxStatus) => void;
 }
 
-// Revert data is ABI-encoded — Error(string) for require messages, Panic(uint)
-// for asserts. viem decodes both without needing error entries in our ABI.
-function decodeRevertReason(raw: any): string {
+async function contractTx(
+  functionName: string,
+  args: readonly unknown[],
+  { value = 0n, onStatus }: TxOpts,
+): Promise<string> {
+  await truapi.accounts.connect();
+  // The host gates signing on ChainSubmit and hangs silently without it, and
+  // the map_account below may itself need to sign — request permission first.
+  await truapi.accounts.ensureChainSubmitPermission();
+  // The tx dry-run runs as the signer, and this runtime rejects dry-runs from
+  // unmapped origins — idempotent fast-path when already mapped.
+  await truapi.contracts.ensureMapped(TAMBOLA_CDM);
+
+  const contract = await getTambolaContract();
+  const handle = (contract as unknown as Record<string, TxHandle>)[functionName];
+  if (!handle) throw new Error(`unknown contract method ${functionName}`);
+
   try {
-    const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
-    const decoded = decodeErrorResult({ abi: TAMBOLA_ABI as Abi, data });
-    return `${decoded.errorName}(${(decoded.args ?? []).map(String).join(", ")})`;
-  } catch {
-    return "unknown reason";
+    const result = await handle.tx(...args, { value, onStatus });
+    if (!result.ok) {
+      throw new Error(`dispatch failed for ${functionName}: ${describeDispatchError(result.dispatchError)}`);
+    }
+    return result.txHash;
+  } catch (e) {
+    throw normalizeTxError(e);
   }
 }
 
@@ -111,9 +65,9 @@ function isInsufficientFundsError(e: any): boolean {
       const parsed = JSON.parse(e.message);
       if (parsed?.type === "Invalid" && parsed?.value?.type === "Payment") return true;
     } catch { /* fall through to substring check */ }
-    return /"Invalid"[\s\S]*"Payment"/.test(e.message);
+    if (/"Invalid"[\s\S]*"Payment"/.test(e.message)) return true;
   }
-  return false;
+  return isInsufficientFundsError(e.cause);
 }
 
 function normalizeTxError(e: unknown): Error {
@@ -125,92 +79,46 @@ function normalizeTxError(e: unknown): Error {
   return e instanceof Error ? e : new Error(String(e));
 }
 
-export async function watchTransaction(
-  tx: { signSubmitAndWatch: (signer: PolkadotSigner, opts?: any) => any },
-  signer: PolkadotSigner,
-  onStatus?: (s: TxStatus) => void,
-): Promise<`0x${string}`> {
-  return new Promise((resolve, reject) => {
-    let resolved = false;
-    const sub = tx
-      .signSubmitAndWatch(signer, { mortality: { mortal: true, period: 256 } })
-      .subscribe({
-        next: (event: any) => {
-          if (event.type === "broadcasted")              onStatus?.("broadcasted");
-          if (event.type === "txBestBlocksState" && event.found && !resolved) {
-            if (!event.ok) { sub.unsubscribe(); reject(new Error("dispatch error")); return; }
-            resolved = true; onStatus?.("in-block"); resolve(event.txHash);
-          }
-          if (event.type === "finalized") {
-            if (!resolved) {
-              if (!event.ok) { sub.unsubscribe(); reject(new Error("dispatch error")); return; }
-              resolve(event.txHash);
-            }
-            onStatus?.("finalized");
-            sub.unsubscribe();
-          }
-        },
-        error: (e: any) => { sub.unsubscribe(); reject(normalizeTxError(e)); },
-      });
-  });
-}
-
 // ---- typed entry points -----------------------------------------------
 
 export async function callCreateGame(opts: {
-  signerAddress: string;
-  signer: PolkadotSigner;
   startTimestampSec: bigint;
   ticketPrice: bigint;                    // planck
   onStatus?: (s: TxStatus) => void;
 }) {
   // The contract stores ticketPrice in 18-dec wei and compares it against
   // msg.value, which the runtime derives as `Revive.call value × RATIO`.
-  const tx = await buildContractCall(opts.signerAddress, "createGame",
-    [opts.startTimestampSec, opts.ticketPrice * NATIVE_TO_ETH_RATIO], 0n);
-  return watchTransaction(tx, opts.signer, opts.onStatus);
+  return contractTx("createGame",
+    [opts.startTimestampSec, opts.ticketPrice * NATIVE_TO_ETH_RATIO],
+    { onStatus: opts.onStatus });
 }
 
 export async function callBuyTicket(opts: {
-  signerAddress: string;
-  signer: PolkadotSigner;
   gameId: bigint;
   layout: TicketLayout;
   ticketPrice: bigint;                    // planck — the runtime scales it into msg.value
   onStatus?: (s: TxStatus) => void;
 }) {
-  const tx = await buildContractCall(opts.signerAddress, "buyTicket",
-    [opts.gameId, opts.layout], opts.ticketPrice);
-  return watchTransaction(tx, opts.signer, opts.onStatus);
+  return contractTx("buyTicket", [opts.gameId, opts.layout],
+    { value: opts.ticketPrice, onStatus: opts.onStatus });
 }
 
 export async function callDrawNumber(opts: {
-  signerAddress: string;
-  signer: PolkadotSigner;
   gameId: bigint;
   onStatus?: (s: TxStatus) => void;
 }) {
-  const tx = await buildContractCall(opts.signerAddress, "drawNumber",
-    [opts.gameId], 0n);
-  return watchTransaction(tx, opts.signer, opts.onStatus);
+  return contractTx("drawNumber", [opts.gameId], { onStatus: opts.onStatus });
 }
 
 export async function callClaimRefund(opts: {
-  signerAddress: string;
-  signer: PolkadotSigner;
   gameId: bigint;
   onStatus?: (s: TxStatus) => void;
 }) {
-  const tx = await buildContractCall(opts.signerAddress, "claimRefund",
-    [opts.gameId], 0n);
-  return watchTransaction(tx, opts.signer, opts.onStatus);
+  return contractTx("claimRefund", [opts.gameId], { onStatus: opts.onStatus });
 }
 
 export async function callWithdraw(opts: {
-  signerAddress: string;
-  signer: PolkadotSigner;
   onStatus?: (s: TxStatus) => void;
 }) {
-  const tx = await buildContractCall(opts.signerAddress, "withdraw", [], 0n);
-  return watchTransaction(tx, opts.signer, opts.onStatus);
+  return contractTx("withdraw", [], { onStatus: opts.onStatus });
 }

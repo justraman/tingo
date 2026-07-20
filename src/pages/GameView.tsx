@@ -19,11 +19,9 @@ import { useVibe } from "@/lib/store/vibe";
 import { GameRules } from "@/components/GameRules";
 import { TxStatusModal } from "@/components/TxStatusModal";
 
-import { useAccounts } from "@/lib/chain/use-accounts";
-import { useWalletStore } from "@/lib/store/wallet";
+import { useAccounts } from "@use-truapi/react";
 import { useDraftStore } from "@/lib/store/draft";
 import { useGameStore } from "@/lib/store/game";
-import { useChatStore } from "@/lib/store/chat";
 
 import {
   readGame, readDrawnNumbers, readTickets, readTicketsByOwner, readIsRefundClaimed, readWithdrawable,
@@ -51,8 +49,8 @@ const WORKER_GRACE_SECONDS = 120;
 export function GameView({ id }: { id: string }) {
   const gameId = BigInt(id);
 
-  const { accounts, isReady } = useAccounts();
-  const selected = useWalletStore((s) => s.selectedAddress) ?? accounts[0]?.address;
+  const { accounts, selectedAccount, isConnected } = useAccounts();
+  const selected = selectedAccount?.address ?? accounts[0]?.address;
 
   const draft = useDraftStore((s) => s.byGame[gameId.toString()]);
   const clearDraft = useDraftStore((s) => s.clear);
@@ -64,7 +62,6 @@ export function GameView({ id }: { id: string }) {
   const appendFinalWinner = useGameStore((s) => s.appendFinalWinner);
   const setNoWinner = useGameStore((s) => s.setNoWinner);
 
-  const closeChat = useChatStore((s) => s.close);
   const soundMuted = useSoundStore((s) => s.muted);
   const toggleSound = useSoundStore((s) => s.toggle);
 
@@ -192,11 +189,9 @@ export function GameView({ id }: { id: string }) {
               host:    e.args.host,
               hostFee: e.args.hostFee,
             });
-            closeChat(gameId);
             break;
           case "GameEndedNoWinner":
             setNoWinner(gameId);
-            closeChat(gameId);
             break;
         }
         // Refresh game scalars asynchronously.
@@ -216,7 +211,7 @@ export function GameView({ id }: { id: string }) {
       teardown?.();
       stopPlayback();
     };
-  }, [gameId, selected, appendDrawn, appendLineWinner, appendFinalWinner, setNoWinner, setGame, closeChat, refreshTickets]);
+  }, [gameId, selected, appendDrawn, appendLineWinner, appendFinalWinner, setNoWinner, setGame, refreshTickets]);
 
   const game = snap?.game;
   const drawn = snap?.drawn ?? [];
@@ -239,13 +234,9 @@ export function GameView({ id }: { id: string }) {
   async function onBuy() {
     beginTx("Buying ticket");
     try {
-      const account = accounts.find((a) => a.address === selected) ?? accounts[0];
-      if (!account) throw new Error("Connect a wallet first");
       if (!game)   throw new Error("Game not loaded");
       if (!draft?.layout) throw new Error("No ticket draft");
       await callBuyTicket({
-        signerAddress: account.address,
-        signer: account.polkadotSigner as any,
         gameId,
         layout: draft.layout,
         ticketPrice: game.ticketPrice,
@@ -267,11 +258,7 @@ export function GameView({ id }: { id: string }) {
   async function onDrawNumber() {
     beginTx("Drawing number");
     try {
-      const account = accounts.find((a) => a.address === selected) ?? accounts[0];
-      if (!account) throw new Error("Connect a wallet first");
       await callDrawNumber({
-        signerAddress: account.address,
-        signer: account.polkadotSigner as any,
         gameId,
         onStatus: (s) => setStatus(s),
       });
@@ -285,16 +272,12 @@ export function GameView({ id }: { id: string }) {
   async function onRefund() {
     beginTx("Claiming refund");
     try {
-      const account = accounts.find((a) => a.address === selected) ?? accounts[0];
-      if (!account) throw new Error("Connect a wallet first");
       await callClaimRefund({
-        signerAddress: account.address,
-        signer: account.polkadotSigner as any,
         gameId,
         onStatus: (s) => setStatus(s),
       });
       setRefundClaimed(true);
-      setWithdrawableAmt(await readWithdrawable(account.address));
+      if (selected) setWithdrawableAmt(await readWithdrawable(selected));
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -305,11 +288,7 @@ export function GameView({ id }: { id: string }) {
   async function onWithdraw() {
     beginTx("Withdrawing winnings");
     try {
-      const account = accounts.find((a) => a.address === selected) ?? accounts[0];
-      if (!account) throw new Error("Connect a wallet first");
       await callWithdraw({
-        signerAddress: account.address,
-        signer: account.polkadotSigner as any,
         onStatus: (s) => setStatus(s),
       });
       setWithdrawableAmt(0n);
@@ -424,7 +403,7 @@ export function GameView({ id }: { id: string }) {
               The draw worker seems to be down. Drawing is permissionless — anyone
               can {startOverdue ? "start the game" : "draw the next number"} from here.
             </p>
-            <Button onClick={onDrawNumber} disabled={busy || !isReady || accounts.length === 0} className="mt-4">
+            <Button onClick={onDrawNumber} disabled={busy || !isConnected || accounts.length === 0} className="mt-4">
               {startOverdue ? "Start game" : "Draw next number"}
             </Button>
           </div>
@@ -489,7 +468,7 @@ export function GameView({ id }: { id: string }) {
             ticketPrice={game.ticketPrice}
             tokenSymbol={CHAIN.symbol}
             decimals={CHAIN.decimals}
-            disabled={busy || !isReady}
+            disabled={busy || !isConnected}
             onBuy={onBuy}
             boughtCount={myTickets.length}
           />
@@ -603,7 +582,7 @@ export function GameView({ id }: { id: string }) {
       </div>
 
       <div className="self-start lg:sticky lg:top-24 lg:h-[calc(100dvh-7.5rem)]">
-        <ChatPanel gameId={gameId} disabled={ended} />
+        <ChatPanel gameId={gameId} disabled={ended || gameOver} />
       </div>
 
       {gameOver && showResult && (

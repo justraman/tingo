@@ -1,19 +1,16 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useHostMode } from "@use-truapi/react";
 import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { GameCard } from "@/components/GameCard";
 import { LobbyHero } from "@/components/LobbyHero";
-import { isHostAsync } from "@/lib/host/detect";
-import { readNextGameId, readGame } from "@/lib/tambola/read";
+import { useGames, type GameListing } from "@/lib/tambola/use-games";
 import { useVibe } from "@/lib/store/vibe";
 import { Trophy } from "lucide-react";
-import type { GameView } from "@/lib/tambola/abi";
-import { STATE_LABELS, effectiveState } from "@/lib/tambola/state";
-
-interface Listing { id: bigint; game: GameView; state: number; }
+import { STATE_LABELS } from "@/lib/tambola/state";
 
 function StateFilter({ games, filter, onChange }: {
-  games: Listing[];
+  games: GameListing[];
   filter: number | null;
   onChange: (state: number | null) => void;
 }) {
@@ -51,41 +48,13 @@ function StateFilter({ games, filter, onChange }: {
 
 export function HomePage() {
   const vibe = useVibe();
-  const [games, setGames] = useState<Listing[]>([]);
-  const [inHost, setInHost] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
+  const hostMode = useHostMode();
+  const { data, isPending: loading, error } = useGames();
   const [filter, setFilter] = useState<number | null>(null);
+  const games = data ?? [];
   const visible = filter === null ? games : games.filter(({ state }) => state === filter);
 
-  useEffect(() => {
-    void isHostAsync().then(setInHost);
-  }, []);
-
-  useEffect(() => {
-    let cancel = false;
-    (async () => {
-      try {
-        const next = await readNextGameId();           // last allocated id (0 if no games)
-        const nowSec = Math.floor(Date.now() / 1000);
-        const out: Listing[] = [];
-        for (let id = 1n; id <= next; id++) {            // ids are 1-based, so `<= next` is correct
-          const g = await readGame(id);
-          if (g.host !== "0x0000000000000000000000000000000000000000") {
-            out.push({ id, game: g, state: effectiveState(g, nowSec) });
-          }
-        }
-        if (!cancel) setGames(out.reverse());
-      } catch (e: any) {
-        if (!cancel) setError(e?.message ?? String(e));
-      } finally {
-        if (!cancel) setLoading(false);
-      }
-    })();
-    return () => { cancel = true; };
-  }, []);
-
-  if (inHost === false) {
+  if (hostMode === "standalone") {
     return (
       <div className="glass animate-rise mx-auto max-w-lg rounded-3xl p-8 text-center">
         <h2 className="font-display text-xl font-semibold leading-tight">Open this app in Polkadot Desktop</h2>
@@ -125,7 +94,7 @@ export function HomePage() {
 
       {!loading && error && (
         <div className="glass animate-rise rounded-3xl p-6 text-center text-sm text-[hsl(var(--destructive))]">
-          Couldn't reach the chain: {error}
+          Couldn't reach the chain: {error.message}
         </div>
       )}
 

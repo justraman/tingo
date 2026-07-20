@@ -19,13 +19,21 @@
  * reverts "too soon" and nothing is submitted.
  */
 
-import { createClient, Binary } from "polkadot-api";
+import { createClient } from "polkadot-api";
 import { getWsProvider } from "polkadot-api/ws";
 import { getPolkadotSigner, type PolkadotSigner } from "polkadot-api/signer";
 import { sr25519CreateDerive } from "@polkadot-labs/hdkd";
 import { DEV_PHRASE, entropyToMiniSecret, mnemonicToEntropy, ss58Address } from "@polkadot-labs/hdkd-helpers";
-import { bytesToHex, encodeFunctionData, decodeFunctionResult, decodeErrorResult, type Abi } from "viem";
-import { ss58ToH160 } from "@parity/product-sdk-address";
+import {
+  createContract,
+  createContractRuntime,
+  ensureContractAccountMapped,
+  type AbiEntry,
+  type Contract,
+  type ContractDef,
+  type ContractRuntime,
+  type ReviveTypedApi,
+} from "@parity/product-sdk-contracts";
 import { encodeData } from "@parity/product-sdk-statement-store";
 import {
   createLazyClient,
@@ -63,20 +71,23 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const chainNowSeconds = async (unsafe: any): Promise<bigint> =>
   BigInt(await unsafe.query.Timestamp.Now.getValue({ at: "best" })) / 1000n;
 
-const revertReason = (raw: any): string => {
-  try {
-    const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
-    const err = decodeErrorResult({ abi: TAMBOLA_ABI as Abi, data });
-    return `${err.errorName}(${(err.args ?? []).join(", ")})`;
-  } catch {
-    return "unknown reason";
-  }
-};
+interface Chain {
+  client: ReturnType<typeof createClient>;
+  unsafe: any;
+  runtime: ContractRuntime;
+  tambola: Contract<ContractDef>;
+}
 
-function connect(env: Env) {
+// The unsafe API structurally satisfies ReviveTypedApi and skips PAPI's
+// compat-token checks — no descriptor bundle needed in the worker.
+function connect(env: Env): Chain {
   const client = createClient(getWsProvider(env.CHAIN_RPC));
   const unsafe = (client as unknown as { getUnsafeApi: () => any }).getUnsafeApi();
-  return { client, unsafe };
+  const runtime = createContractRuntime(unsafe as ReviveTypedApi, { at: "best" });
+  const tambola = createContract(runtime, env.TAMBOLA_ADDRESS, TAMBOLA_ABI as unknown as AbiEntry[], {
+    defaultOrigin: env.READ_ONLY_ORIGIN,
+  });
+  return { client, unsafe, runtime, tambola };
 }
 
 function makeSigner(env: Env): { signer: PolkadotSigner; address: string } {
@@ -88,25 +99,19 @@ function makeSigner(env: Env): { signer: PolkadotSigner; address: string } {
   };
 }
 
-async function readContract<T>(unsafe: any, env: Env, functionName: string, args: readonly unknown[] = []): Promise<T> {
-  const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName, args });
-  // PAPI v2 + metadata v16: H160 params are hex strings, Bytes results are Uint8Array.
-  const dryRun = await unsafe.apis.ReviveApi.call(
-    env.READ_ONLY_ORIGIN, env.TAMBOLA_ADDRESS.toLowerCase(), 0n, undefined, undefined,
-    Binary.fromHex(calldata), { at: "best" },
-  );
-  if (!dryRun.result.success) throw new Error(`dry-run failed for ${functionName}`);
-  if (dryRun.result.value.flags & 1) throw new Error(`contract reverted in ${functionName}`);
-  const raw = dryRun.result.value.data;
-  const data = (typeof raw === "string" ? raw : bytesToHex(raw.asBytes?.() ?? raw)) as `0x${string}`;
-  return decodeFunctionResult({ abi: TAMBOLA_ABI as Abi, functionName, data }) as T;
+async function readContract<T>(tambola: Contract<ContractDef>, functionName: string, args: readonly unknown[] = []): Promise<T> {
+  const handle = (tambola as unknown as Record<string, { query: (...a: unknown[]) => Promise<{ success: boolean; value: unknown }> }>)[functionName];
+  if (!handle) throw new Error(`unknown contract method ${functionName}`);
+  const result = await handle.query(...args);
+  if (!result.success) throw new Error(`dry-run failed for ${functionName}`);
+  return result.value as T;
 }
 
-async function readAllGames(unsafe: any, env: Env): Promise<Array<GameView & { id: bigint }>> {
-  const nextGameId = await readContract<bigint>(unsafe, env, "nextGameId");
+async function readAllGames(tambola: Contract<ContractDef>): Promise<Array<GameView & { id: bigint }>> {
+  const nextGameId = await readContract<bigint>(tambola, "nextGameId");
   const games: Array<GameView & { id: bigint }> = [];
   for (let id = 1n; id <= nextGameId; id++) {
-    games.push({ id, ...(await readContract<GameView>(unsafe, env, "getGame", [id])) });
+    games.push({ id, ...(await readContract<GameView>(tambola, "getGame", [id])) });
   }
   return games;
 }
@@ -172,66 +177,36 @@ async function announceMilestones(env: Env, games: Array<GameView & { id: bigint
 
 // ---- drawer ---------------------------------------------------------------
 
-async function submitDraw(unsafe: any, env: Env, signer: PolkadotSigner, signerAddress: string, gameId: bigint) {
-  const calldata = encodeFunctionData({ abi: TAMBOLA_ABI as Abi, functionName: "drawNumber", args: [gameId] });
-  const dest = env.TAMBOLA_ADDRESS.toLowerCase() as `0x${string}`;
-  const data = Binary.fromHex(calldata);
-
-  // The runtime rejects both dry-runs and calls from unmapped origins.
-  const h160 = ss58ToH160(signerAddress);
-  const isMapped = (await unsafe.query.Revive.OriginalAccount.getValue(h160)) !== undefined;
-
-  const dryRun = await unsafe.apis.ReviveApi.call(
-    isMapped ? signerAddress : env.READ_ONLY_ORIGIN, dest, 0n, undefined, undefined, data,
-    { at: "best" },
-  );
-  if (!dryRun.result.success) throw new Error("draw dry-run failed");
-  if (dryRun.result.value.flags & 1) throw new Error(`draw reverted: ${revertReason(dryRun.result.value.data)}`);
-
-  const reviveCall = unsafe.tx.Revive.call({
-    dest,
-    value: 0n,
-    weight_limit: {
-      ref_time:   dryRun.weight_required.ref_time   * 4n,
-      proof_size: dryRun.weight_required.proof_size * 4n,
-    },
-    storage_deposit_limit: dryRun.storage_deposit?.value,
-    data,
-  });
-  const tx = isMapped
-    ? reviveCall
-    : unsafe.tx.Utility.batch_all({
-        calls: [unsafe.tx.Revive.map_account().decodedCall, reviveCall.decodedCall],
-      });
-
+async function submitDraw(tambola: Contract<ContractDef>, signer: PolkadotSigner, signerAddress: string, gameId: bigint) {
+  const handle = (tambola as unknown as { drawNumber: { tx: (...a: unknown[]) => Promise<{ ok: boolean; dispatchError?: unknown }> } }).drawNumber;
   // Resolve on best-block inclusion — waiting for finality would eat the
   // draw-cadence budget; the contract re-checks everything anyway.
-  await new Promise<void>((resolve, reject) => {
-    const sub = tx.signSubmitAndWatch(signer, { mortality: { mortal: true, period: 64 } }).subscribe({
-      next: (e: any) => {
-        if ((e.type === "txBestBlocksState" && e.found) || e.type === "finalized") {
-          sub.unsubscribe();
-          e.ok ? resolve() : reject(new Error("draw dispatch error"));
-        }
-      },
-      error: (e: any) => { sub.unsubscribe(); reject(e); },
-    });
+  const result = await handle.tx(gameId, {
+    signer,
+    origin: signerAddress,
+    mortalityPeriod: 64,
+    waitFor: "best-block",
   });
+  if (!result.ok) throw new Error(`draw dispatch error: ${JSON.stringify(result.dispatchError, (_, v) => (typeof v === "bigint" ? v.toString() : v))}`);
 }
 
 async function runDrawer(env: Env, startedAtMs: number) {
-  const { client, unsafe } = await connect(env);
+  const { client, unsafe, runtime, tambola } = connect(env);
   try {
     const { signer, address } = makeSigner(env);
-    const interval = await readContract<number>(unsafe, env, "DRAW_INTERVAL_SECONDS")
+    const interval = await readContract<number>(tambola, "DRAW_INTERVAL_SECONDS")
       .then(BigInt)
       .catch(() => FALLBACK_DRAW_INTERVAL);
 
-    const games = await readAllGames(unsafe, env);
+    const games = await readAllGames(tambola);
     await announceMilestones(env, games);
 
     const candidates = games.filter((g) => (g.state === 0 || g.state === 1) && g.ticketCount > 0);
     if (candidates.length === 0) return;
+
+    // The runtime rejects both dry-runs and calls from unmapped origins;
+    // idempotent fast-path once the drawer account is mapped.
+    await ensureContractAccountMapped(runtime, address, signer);
 
     const active = new Map(candidates.map((g) => [g.id, { startTime: g.startTime, lastDraw: g.lastDrawTime }]));
     const deadline = startedAtMs + DRAWER_BUDGET_MS;
@@ -242,7 +217,7 @@ async function runDrawer(env: Env, startedAtMs: number) {
         if (chainNow < g.startTime) continue;
         if (chainNow < g.lastDraw + interval) continue;
         try {
-          await submitDraw(unsafe, env, signer, address, id);
+          await submitDraw(tambola, signer, address, id);
           console.log(`drew for game ${id} as ${address}`);
         } catch (e) {
           console.error(`draw failed for game ${id}:`, e);
@@ -252,7 +227,7 @@ async function runDrawer(env: Env, startedAtMs: number) {
         g.lastDraw = await chainNowSeconds(unsafe);
         // A draw can end the game (full house, or all 90 drawn) — re-read the
         // state and retire finished games so we never draw past a winner.
-        const fresh = await readContract<GameView>(unsafe, env, "getGame", [id]).catch(() => null);
+        const fresh = await readContract<GameView>(tambola, "getGame", [id]).catch(() => null);
         if (fresh && fresh.state >= 2) {
           active.delete(id);
           console.log(`game ${id} reached final state ${fresh.state}; draws stopped`);
@@ -268,7 +243,7 @@ async function runDrawer(env: Env, startedAtMs: number) {
 // ---- indexer ---------------------------------------------------------------
 
 async function runIndexer(env: Env) {
-  const { client, unsafe } = await connect(env);
+  const { client, tambola } = connect(env);
   try {
     // Final games (Won / NoWinner) never change again — index them once.
     const finalRows = await env.DB
@@ -276,12 +251,12 @@ async function runIndexer(env: Env) {
       .all<{ game_id: number }>();
     const finalIds = new Set(finalRows.results.map((r) => r.game_id));
 
-    const nextGameId = await readContract<bigint>(unsafe, env, "nextGameId");
+    const nextGameId = await readContract<bigint>(tambola, "nextGameId");
     const upserts: D1PreparedStatement[] = [];
     for (let id = 1n; id <= nextGameId; id++) {
       if (finalIds.has(Number(id))) continue;
-      const g = await readContract<GameView>(unsafe, env, "getGame", [id]);
-      const drawn = await readContract<readonly number[]>(unsafe, env, "getDrawnNumbers", [id]);
+      const g = await readContract<GameView>(tambola, "getGame", [id]);
+      const drawn = await readContract<readonly number[]>(tambola, "getDrawnNumbers", [id]);
       upserts.push(
         env.DB.prepare(
           `INSERT INTO games (game_id, host, ticket_price, start_time, last_draw_time,

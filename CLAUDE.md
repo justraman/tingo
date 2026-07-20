@@ -9,8 +9,8 @@ On-chain Tambola (Indian Bingo). A Solidity contract on Asset Hub (pallet-revive
 PolkaVM) is the referee — it owns the pot, validates tickets, draws numbers, and pays
 out. The UI is a static Vite + React SPA "product" that runs inside a Polkadot host
 (Desktop / Mobile / Web) and reaches the chain + host services through **TrUAPI** via
-`@parity/product-sdk-host`. A Cloudflare cron worker (`cloudflare/`) drives draws,
-chat announcements, and a D1 game index.
+`@use-truapi/react` (hooks + a shared runtime over the product-sdk). A Cloudflare
+cron worker (`cloudflare/`) drives draws, chat announcements, and a D1 game index.
 
 ## How to write code here
 
@@ -26,10 +26,10 @@ it without prose.
   (checks-effects-interactions in `withdraw`), a known caveat (`prevrandao` RNG is
   influenceable). One line, stating the reason, never the mechanism.
 - **Names do the documenting.** `bitmasksFromLayout`, `READ_ONLY_ORIGIN`,
-  `ensureSignerConnected` — a good name removes the need for a comment. Rename before
+  `getTambolaContract` — a good name removes the need for a comment. Rename before
   you annotate.
 - **Small, single-purpose modules.** One concern per file, matching the existing
-  `src/lib/{chain,tambola,store,host,chat}` split. Pure logic (ticket gen, encoding,
+  `src/lib/{chain,tambola,store,chat}` split. Pure logic (ticket gen, encoding,
   prize math) stays free of I/O and React.
 - **Types are load-bearing.** No `any` in new code except at the unavoidable PAPI
   unsafe-API boundary, and isolate that cast in the lib layer, never in a component.
@@ -58,14 +58,16 @@ it without prose.
    `withdraw()`. Keep checks-effects-interactions + `nonReentrant`. Prize bps must sum
    to 100% in every unclaimed-line combination (the tests assert this).
 5. **Host-safe I/O only.** The product sandbox forbids direct HTTP. So:
-   - Reads go through `ReviveApi.call` **dry-run** (viem-encoded calldata), never a viem
-     `PublicClient`.
-   - Chain transport is WebSocket PAPI: `getHostProvider` in host mode, `getWsProvider`
-     standalone. This selection lives **only** in `src/lib/chain/client.ts`.
-   - Host detection lives **only** in `src/lib/host/detect.ts`.
-6. **Reach TrUAPI through `src/lib` wrappers**, not raw SDK imports in components. Every
-   host getter (`getChatManager`, `getHostProvider`, …) **returns `null` outside a
-   host** — always handle that branch; standalone must degrade, not crash.
+   - Reads go through `ReviveApi.call` **dry-run** via the use-truapi contract handle
+     (`src/lib/tambola/contract.ts`), never an HTTP client.
+   - Chain transport is WebSocket PAPI: host provider in host mode, `wsUrls`
+     standalone. The use-truapi runtime owns this selection; its config lives **only**
+     in `src/lib/truapi.ts` (host detection included — `useHostMode`/`runtime.host`).
+6. **Chain and host I/O goes through `@use-truapi/react` or the `src/lib` wrappers**,
+   never raw product-sdk imports. Components use the hooks (`useAccounts`,
+   `useBalance`, `useStatements`, …); non-React modules use the `truapi` runtime
+   singleton. Host-only features degrade standalone (statements inert, storage falls
+   back to localStorage) — never crash.
 7. **Keep chain constants in one place.** `CHAIN` (`src/lib/chain/constants.ts`) and the
    contract constants must agree — especially `DRAW_INTERVAL_SECONDS`. Game timing is
    wall-clock (`block.timestamp`) everywhere; never reintroduce block-number timing.

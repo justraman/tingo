@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { isValidH160 } from "@parity/product-sdk-address";
+import { isValidH160 } from "@use-truapi/core";
 import { resolveOriginalSs58 } from "@/lib/chain/original-account";
 import { shortenAddress } from "@/lib/utils";
 

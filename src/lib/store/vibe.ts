@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { getHostLocalStorage } from "@parity/product-sdk-host";
-import { isHostAsync } from "@/lib/host/detect";
+import { truapi } from "@/lib/truapi";
 
 export const VIBES = ["glass", "arcade", "vintage"] as const;
 export type Vibe = (typeof VIBES)[number];
@@ -34,24 +33,17 @@ function readCachedVibe(): Vibe | null {
   }
 }
 
-async function hostStorage() {
-  return (await isHostAsync()) ? await getHostLocalStorage() : null;
-}
-
+// truapi.host.storage is the host's key-value store inside a container and
+// browser localStorage standalone — same key, plain string in both.
 async function readStoredVibe(): Promise<Vibe | null> {
-  const storage = await hostStorage();
-  if (storage) {
-    const v = (await storage.readString(KEY)).trim();
-    if (isVibe(v)) return v;
-    return readCachedVibe(); // host has none yet — honor a local pick from this device
-  }
-  return readCachedVibe();
+  const v = (await truapi.host.storage.getString(KEY))?.trim();
+  if (isVibe(v)) return v;
+  return readCachedVibe(); // host has none yet — honor a local pick from this device
 }
 
 async function writeStoredVibe(vibe: Vibe): Promise<void> {
   try { localStorage.setItem(KEY, vibe); } catch { /* private mode / unavailable */ }
-  const storage = await hostStorage();
-  if (storage) await storage.writeString(KEY, vibe);
+  await truapi.host.storage.setString(KEY, vibe);
 }
 
 /** Paint the cached vibe before React mounts so the first frame isn't the

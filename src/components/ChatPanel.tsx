@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { useUserId } from "@use-truapi/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send, MessagesSquare, Pencil } from "lucide-react";
-import { useChatStore, type ChatMessage } from "@/lib/store/chat";
-import { attachChatSubscription, sendChat } from "@/lib/chat/manager";
+import { useGameChat, sendChat, type ChatMessage } from "@/lib/chat/messages";
 import { onReaction, sendReaction } from "@/lib/chat/reactions";
 import { readStoredUsername, writeStoredUsername } from "@/lib/chat/username";
-import { getPrimaryUsername } from "@/lib/host/identity";
 import { CHAT_NAME_MAX, REACTION_EMOJIS } from "@/lib/chat/protocol";
 import { shortenAddress } from "@/lib/utils";
 import { hueFromSeed } from "@/lib/ticket-hues";
@@ -17,10 +16,6 @@ interface Props {
   gameId: bigint;
   disabled?: boolean;       // game ended — read-only
 }
-
-// Stable fallback: `?? []` in a selector mints a fresh array every render,
-// which useSyncExternalStore treats as an ever-changing snapshot (infinite loop).
-const NO_MESSAGES: ChatMessage[] = [];
 
 // Raining is earned, not free: 5 rapid presses of the same emoji trigger it,
 // then the sender sits out a minute so one player can't flood the screen.
@@ -43,8 +38,8 @@ function senderLabel(m: ChatMessage): string {
 }
 
 export function ChatPanel({ gameId, disabled }: Props) {
-  const messages = useChatStore((s) => s.byId[gameId.toString()] ?? NO_MESSAGES);
-  const isClosed = useChatStore((s) => s.closed[gameId.toString()] ?? false);
+  const messages = useGameChat(gameId);
+  const { data: primaryUsername } = useUserId();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   // undefined = still loading from storage, null = never chosen (gate the input)
@@ -58,21 +53,21 @@ export function ChatPanel({ gameId, disabled }: Props) {
   const nextFloatId = useRef(0);
 
   useEffect(() => {
-    void attachChatSubscription(gameId);
-  }, [gameId]);
-
-  useEffect(() => {
     let cancel = false;
     (async () => {
       const stored = await readStoredUsername().catch(() => null);
       if (cancel) return;
-      if (stored) { setUsername(stored); return; }
-      setUsername(null);
-      const suggested = await getPrimaryUsername().catch(() => null);
-      if (!cancel && suggested) setNameDraft(suggested.slice(0, CHAT_NAME_MAX));
+      setUsername(stored ?? null);
     })();
     return () => { cancel = true; };
   }, []);
+
+  // Suggest the host's TrUAPI username in the name form until the user types.
+  useEffect(() => {
+    if (username === null && primaryUsername) {
+      setNameDraft((draft) => draft || primaryUsername.slice(0, CHAT_NAME_MAX));
+    }
+  }, [username, primaryUsername]);
 
   useEffect(() => {
     const viewport = scrollerRef.current?.closest<HTMLElement>("[data-radix-scroll-area-viewport]");
@@ -101,7 +96,7 @@ export function ChatPanel({ gameId, disabled }: Props) {
     });
   }, [gameId]);
 
-  const readonly = disabled || isClosed;
+  const readonly = Boolean(disabled);
   const showNameForm = !readonly && username !== undefined && (username === null || editingName);
 
   async function saveName() {
@@ -121,7 +116,7 @@ export function ChatPanel({ gameId, disabled }: Props) {
     if (!trimmed || readonly || !username) return;
     setBusy(true);
     try {
-      await sendChat(gameId, trimmed);
+      await sendChat(gameId, trimmed, username);
       setText("");
     } catch (e) {
       console.error("chat send failed", e);
