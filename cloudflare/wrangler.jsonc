@@ -10,8 +10,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Crons disabled 2026-07-20: draws/announcements/indexing moved to the
+  // polkadot-flow runner (runner/loop.ts + ~/Work/polkadot-flow PR #31).
+  // The worker stays deployed only for the read-only GET /games endpoint.
+  // To re-enable the old behavior: restore ["* * * * *", "*/5 * * * *"].
   "triggers": {
-    "crons": ["* * * * *", "*/5 * * * *"]
+    "crons": []
   },
   "vars": {
     "CHAIN_RPC": "wss://paseo-asset-hub-next-rpc.polkadot.io",

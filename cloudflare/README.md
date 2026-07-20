@@ -1,5 +1,9 @@
 # Tambola Cloudflare worker
 
+> **Crons disabled 2026-07-20.** Draws, announcements, and indexing are now
+> driven by polkadot-flow nodes running the tambola workflows from
+> [polkadot-flow PR #31](https://github.com/paritytech/polkadot-flow/pull/31)
+
 Cron-driven companion to the on-chain game. Two jobs, dispatched by cron
 pattern in `src/index.ts`:
 
